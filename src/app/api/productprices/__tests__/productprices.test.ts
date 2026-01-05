@@ -1,0 +1,172 @@
+import { NextRequest } from 'next/server';
+import { GET, POST, DELETE } from '../route';
+import { prisma } from '@/lib/db';
+
+// Mock the prisma client
+jest.mock('@/lib/db', () => ({
+  prisma: {
+    productPrice: {
+      findMany: jest.fn(),
+      upsert: jest.fn(),
+      delete: jest.fn(),
+    },
+    $transaction: jest.fn(),
+  },
+}));
+
+describe('Product Prices API', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+  });
+
+  // --- GET Tests ---
+  describe('GET /api/productprices', () => {
+    it('should return product prices for a given price_list_id', async () => {
+      const mockPrices = [
+        { product_id: 'prod1', price_usd: 10.0 },
+        { product_id: 'prod2', price_usd: 20.0 },
+      ];
+      (prisma.productPrice.findMany as jest.Mock).mockResolvedValue(
+        mockPrices.map(p => ({ ...p, price_usd: new (require('decimal.js'))(p.price_usd) }))
+      );
+
+      const req = new NextRequest('http://localhost/api/productprices?price_list_id=list1');
+      const res = await GET(req);
+      const data = await res.json();
+
+      expect(res.status).toBe(200);
+      expect(data).toEqual([
+        { product_id: 'prod1', price_usd: 10.0 },
+        { product_id: 'prod2', price_usd: 20.0 },
+      ]);
+      expect(prisma.productPrice.findMany).toHaveBeenCalledWith({
+        where: { price_list_id: 'list1' },
+        select: { product_id: true, price_usd: true },
+      });
+    });
+
+    it('should return product prices for a given product_id', async () => {
+      const mockPrices = [
+        { price_list_id: 'list1', price_usd: 10.0 },
+        { price_list_id: 'list2', price_usd: 15.0 },
+      ];
+      (prisma.productPrice.findMany as jest.Mock).mockResolvedValue(
+        mockPrices.map(p => ({ ...p, price_usd: new (require('decimal.js'))(p.price_usd) }))
+      );
+
+      const req = new NextRequest('http://localhost/api/productprices?product_id=prod1');
+      const res = await GET(req);
+      const data = await res.json();
+
+      expect(res.status).toBe(200);
+      expect(data).toEqual([
+        { price_list_id: 'list1', price_usd: 10.0 },
+        { price_list_id: 'list2', price_usd: 15.0 },
+      ]);
+      expect(prisma.productPrice.findMany).toHaveBeenCalledWith({
+        where: { product_id: 'prod1' },
+        select: { price_list_id: true, price_usd: true },
+      });
+    });
+
+    it('should return 400 if no price_list_id or product_id is provided', async () => {
+      const req = new NextRequest('http://localhost/api/productprices');
+      const res = await GET(req);
+      const data = await res.json();
+
+      expect(res.status).toBe(400);
+      expect(data.error).toBe('Falta el ID del producto o de la lista de precios.');
+    });
+  });
+
+  // --- POST Tests ---
+  describe('POST /api/productprices', () => {
+    it('should update/create product prices for a price list', async () => {
+      const req = new NextRequest('http://localhost/api/productprices', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          price_list_id: 'list1',
+          prices: {
+            'prod1': 10.0,
+            'prod2': 20.0,
+          },
+        }),
+      });
+
+      (prisma.$transaction as jest.Mock).mockImplementation(async (cb) => {
+        await Promise.all(cb);
+        return [];
+      });
+      (prisma.productPrice.upsert as jest.Mock).mockImplementation((args) => args);
+
+      const res = await POST(req);
+      const data = await res.json();
+
+      expect(res.status).toBe(200);
+      expect(data.message).toBe('Precios actualizados correctamente.');
+      expect(prisma.$transaction).toHaveBeenCalledTimes(1);
+      expect(prisma.productPrice.upsert).toHaveBeenCalledTimes(2);
+      expect(prisma.productPrice.upsert).toHaveBeenCalledWith(expect.objectContaining({
+        where: { product_id_price_list_id: { product_id: 'prod1', price_list_id: 'list1' } },
+        create: { product_id: 'prod1', price_list_id: 'list1', price_usd: 10.0 },
+      }));
+      expect(prisma.productPrice.upsert).toHaveBeenCalledWith(expect.objectContaining({
+        where: { product_id_price_list_id: { product_id: 'prod2', price_list_id: 'list1' } },
+        create: { product_id: 'prod2', price_list_id: 'list1', price_usd: 20.0 },
+      }));
+    });
+
+    it('should return 400 if insufficient data is provided for POST', async () => {
+      const req = new NextRequest('http://localhost/api/productprices', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ price_list_id: 'list1' }), // Missing prices
+      });
+      const res = await POST(req);
+      const data = await res.json();
+
+      expect(res.status).toBe(400);
+      expect(data.error).toBe('Datos insuficientes para guardar los precios.');
+    });
+  });
+
+  // --- DELETE Tests ---
+  describe('DELETE /api/productprices', () => {
+    it('should delete a product price entry', async () => {
+      const req = new NextRequest('http://localhost/api/productprices', {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ price_list_id: 'list1', product_id: 'prod1' }),
+      });
+      (prisma.productPrice.delete as jest.Mock).mockResolvedValue({});
+
+      const res = await DELETE(req);
+      const data = await res.json();
+
+      expect(res.status).toBe(200);
+      expect(data.message).toBe('Producto desenlazado correctamente.');
+      expect(prisma.productPrice.delete).toHaveBeenCalledWith({
+        where: {
+          product_id_price_list_id: {
+            product_id: 'prod1',
+            price_list_id: 'list1',
+          },
+        },
+      });
+    });
+
+    it('should return 400 if insufficient data is provided for DELETE', async () => {
+      const req = new NextRequest('http://localhost/api/productprices', {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ price_list_id: 'list1' }), // Missing product_id
+      });
+      const res = await DELETE(req);
+      const data = await res.json();
+
+      expect(res.status).toBe(400);
+      expect(data.error).toBe('Faltan el ID del producto o de la lista de precios para desenlazar.');
+    });
+  });
+});
