@@ -4,7 +4,7 @@ import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { MoreHorizontal, Loader, AlertCircle } from "lucide-react";
+import { MoreHorizontal, Loader, AlertCircle, Pencil, Trash2 } from "lucide-react";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
@@ -12,12 +12,17 @@ import { ServiceForm } from "./ServiceForm";
 import * as z from "zod";
 import { ProductType, BillingCycle } from "@prisma/client";
 import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert";
+import { ProductsExportModal } from "./ProductsExportModal"; // Import the new modal
 
 interface Product {
   id: string;
   name: string;
   type: ProductType;
   billing_cycle: BillingCycle | null;
+  category: {
+    id: string;
+    name: string;
+  };
 }
 
 const typeDisplay: { [key: string]: string } = {
@@ -54,6 +59,9 @@ export function ServicesTab() {
   const [deletingServiceId, setDeletingServiceId] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
+
+  // State for Export Modal
+  const [isExportModalOpen, setIsExportModalOpen] = useState(false);
 
   async function fetchData() {
     try {
@@ -219,18 +227,25 @@ export function ServicesTab() {
           </DialogHeader>
           {submitError && <Alert variant="destructive"><AlertCircle className="h-4 w-4" /><AlertTitle>Error</AlertTitle><AlertDescription>{submitError}</AlertDescription></Alert>}
           <DialogFooter className="mt-4">
-            <Button variant="outline" onClick={() => setDeleteDialogOpen(false)} disabled={isSubmitting}>Cancelar</Button>
+            <Button className="bg-cyan-500 hover:bg-cyan-600 text-white" onClick={() => setDeleteDialogOpen(false)} disabled={isSubmitting}>Cancelar</Button>
             <Button variant="destructive" onClick={handleDelete} disabled={isSubmitting}>{isSubmitting ? <><Loader className="mr-2 h-4 w-4 animate-spin" />Eliminando...</> : "Eliminar"}</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
+      
+      {/* Products Export Modal */}
+      <ProductsExportModal
+        isOpen={isExportModalOpen}
+        onClose={() => setIsExportModalOpen(false)}
+      />
 
       <Card>
         <CardHeader>
           <div className="flex items-center justify-between">
             <CardTitle>Servicios</CardTitle>
             <div className="flex items-center space-x-4">
-              <Button onClick={() => setCreateDialogOpen(true)}>Crear Nuevo Servicio</Button>
+              <Button className="bg-cyan-500 hover:bg-cyan-600 text-white" onClick={() => setIsExportModalOpen(true)}>Exportar Productos</Button>
+              <Button className="bg-cyan-500 hover:bg-cyan-600 text-white" onClick={() => setCreateDialogOpen(true)}>Crear Nuevo Servicio</Button>
             </div>
           </div>
         </CardHeader>
@@ -242,6 +257,7 @@ export function ServicesTab() {
               <TableHeader>
                 <TableRow>
                   <TableHead>Nombre del Servicio</TableHead>
+                  <TableHead>Categoría</TableHead>
                   <TableHead>Tipo</TableHead>
                   <TableHead>Ciclo de Facturación</TableHead>
                   <TableHead><span className="sr-only">Acciones</span></TableHead>
@@ -252,6 +268,7 @@ export function ServicesTab() {
                   return (
                     <TableRow key={service.id}>
                       <TableCell className="font-medium">{service.name}</TableCell>
+                      <TableCell>{service.category ? service.category.name : "N/A"}</TableCell>
                       <TableCell>{typeDisplay[service.type] || "N/A"}</TableCell>
                       <TableCell>{service.billing_cycle ? cycleDisplay[service.billing_cycle] : "N/A"}</TableCell>
                       <TableCell>
@@ -264,8 +281,12 @@ export function ServicesTab() {
                           </DropdownMenuTrigger>
                           <DropdownMenuContent align="end">
                             <DropdownMenuLabel>Acciones</DropdownMenuLabel>
-                            <DropdownMenuItem onClick={() => openEditDialog(service)}>Editar</DropdownMenuItem>
-                            <DropdownMenuItem className="text-red-500" onClick={() => openDeleteDialog(service.id)}>Eliminar</DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => openEditDialog(service)}>
+                              <Pencil className="mr-2 h-4 w-4" /> Editar
+                            </DropdownMenuItem>
+                            <DropdownMenuItem className="text-red-500" onClick={() => openDeleteDialog(service.id)}>
+                              <Trash2 className="mr-2 h-4 w-4" /> Eliminar
+                            </DropdownMenuItem>
                           </DropdownMenuContent>
                         </DropdownMenu>
                       </TableCell>

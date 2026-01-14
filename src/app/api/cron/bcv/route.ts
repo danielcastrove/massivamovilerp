@@ -19,13 +19,13 @@ export async function GET() {
     const { data } = await axios.get(bcvUrl, { headers: headers });
     const $ = cheerio.load(data);
 
-    console.log('--- [BCV Cron] Dry Run: Start ---');
+    // console.log('--- [BCV Cron] Dry Run: Start ---');
 
     // --- Extracción del Valor del Dólar ---
     const dollarValue = $('#dolar').find('strong').text();
     const cleanDollarValue = dollarValue.replace(/,/g, '.');
     const bcvRate = parseFloat(cleanDollarValue);
-    console.log(`[BCV Cron] Step 1: Scraped Data. Rate found: ${bcvRate}`);
+    // console.log(`[BCV Cron] Step 1: Scraped Data. Rate found: ${bcvRate}`);
 
     if (isNaN(bcvRate)) {
       throw new Error('Could not parse BCV rate from website.');
@@ -54,10 +54,10 @@ export async function GET() {
     }
 
     const fechaValor = new Date(Date.UTC(year, month, day));
-    console.log(`[BCV Cron] Step 2: Parsed 'Fecha Valor' from BCV website: ${fechaValor.toISOString()}`);
+    // console.log(`[BCV Cron] Step 2: Parsed 'Fecha Valor' from BCV website: ${fechaValor.toISOString()}`);
 
     // --- Lógica de Fechas para el Registro de Tasas (Idempotente) ---
-    console.log('[BCV Cron] Step 3: Determining fecha_inicio and fecha_fin for the new rate record based on clarified understanding...');
+    // console.log('[BCV Cron] Step 3: Determining fecha_inicio and fecha_fin for the new rate record based on clarified understanding...');
     
     const currentDateOnly = new Date();
     currentDateOnly.setUTCHours(0, 0, 0, 0); // Normalizar a medianoche UTC
@@ -71,21 +71,21 @@ export async function GET() {
                       currentDateOnly.getDate() === fechaValor.getDate();
 
     if (isSameDay) {
-      console.log('[BCV Cron] Current run date is the same as fechaValor. fecha_inicio = fechaValor.');
+      // console.log('[BCV Cron] Current run date is the same as fechaValor. fecha_inicio = fechaValor.');
       fechaInicio = fechaValor;
     } else {
       // Si currentDateOnly es diferente de fechaValor, y sabemos que fechaValor no es una fecha pasada,
       // entonces currentDateOnly debe ser ANTERIOR a fechaValor.
       // En este caso, la tasa inicia el día siguiente al que corrió el cron.
-      console.log('[BCV Cron] Current run date is different (earlier) from fechaValor. fecha_inicio = current_date + 1 day.');
+      // console.log('[BCV Cron] Current run date is different (earlier) from fechaValor. fecha_inicio = current_date + 1 day.');
       fechaInicio = new Date(currentDateOnly); // Crear una nueva instancia para evitar mutar
       fechaInicio.setUTCDate(fechaInicio.getUTCDate() + 1);
     }
     
-    console.log(`[BCV Cron] Calculated Dates for new record: fecha_inicio: ${fechaInicio.toISOString()}, fecha_fin: ${fechaFin.toISOString()}`);
+    // console.log(`[BCV Cron] Calculated Dates for new record: fecha_inicio: ${fechaInicio.toISOString()}, fecha_fin: ${fechaFin.toISOString()}`);
     
     // --- Guardado en Base de Datos (Idempotente) ---
-    console.log(`[BCV Cron] Step 4: Upserting new rate into DB.`);
+    // console.log(`[BCV Cron] Step 4: Upserting new rate into DB.`);
     const upsertData = {
       where: { fecha_efectiva: fechaValor },
       // Si ya existe un registro para esta fecha_efectiva, solo actualizamos la tasa.
@@ -101,11 +101,11 @@ export async function GET() {
         fecha_fin: fechaFin,
       },
     };
-    console.log('[BCV Cron] DB-UPSERT Data:', JSON.stringify(upsertData, null, 2));
+    // console.log('[BCV Cron] DB-UPSERT Data:', JSON.stringify(upsertData, null, 2));
 
     await prisma.tasaBcv.upsert(upsertData);
 
-    console.log(`[BCV Cron] --- Finished. BCV rate updated in TasaBcv: ${bcvRate} for date ${fechaValor.toISOString()} ---`);
+    // console.log(`[BCV Cron] --- Finished. BCV rate updated in TasaBcv: ${bcvRate} for date ${fechaValor.toISOString()} ---`);
     return NextResponse.json({
       message: 'Scraping completado y guardado en TasaBcv',
       tasa_bcv: bcvRate,

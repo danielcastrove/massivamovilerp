@@ -5,13 +5,18 @@ import { authConfig } from '../auth.config';
 
 const { auth } = NextAuth(authConfig);
 
-export async function middleware(request: NextRequest) {
+export async function proxy(request: NextRequest) {
     const session = await auth();
+
+    // console.log('--- NEW Middleware Debug ---');
+    // console.log('Session Object (again):', JSON.stringify(session, null, 2));
+
     const { nextUrl } = request;
 
     const isLoggedIn = !!session?.user;
     const userRole = session?.user?.role as UserRole | undefined;
-    const userModules = session?.user?.modules as { path?: string }[] | undefined;
+        const userModules = session?.user?.modules as { path?: string }[] | undefined;
+
 
     const isOnDashboard = nextUrl.pathname.startsWith('/dashboard');
     const isOnLoginPage = nextUrl.pathname.startsWith('/auth/login');
@@ -39,22 +44,6 @@ export async function middleware(request: NextRequest) {
       
       // 4. For any other case (e.g., CLIENTE, or EXTRA without permission), deny access
       return NextResponse.redirect(new URL('/access-denied', nextUrl));
-    }
-
-    // RBAC for test modules (can be removed later)
-    const protectedTestModulePaths: { [key: string]: UserRole[] } = {
-      '/test-modules/admin-only': [UserRole.MASSIVA_ADMIN],
-      '/test-modules/extra-only': [UserRole.MASSIVA_EXTRA, UserRole.MASSIVA_ADMIN],
-      '/test-modules/client-only': [UserRole.CLIENTE, UserRole.MASSIVA_ADMIN],
-      '/test-modules/all-roles': [UserRole.MASSIVA_ADMIN, UserRole.MASSIVA_EXTRA, UserRole.CLIENTE],
-    };
-
-    for (const path in protectedTestModulePaths) {
-      if (nextUrl.pathname.startsWith(path)) {
-        if (!userRole || !protectedTestModulePaths[path].includes(userRole)) {
-          return NextResponse.redirect(new URL('/access-denied', nextUrl));
-        }
-      }
     }
 
     if (isOnDashboard && !isLoggedIn) {

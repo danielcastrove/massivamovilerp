@@ -1,6 +1,3 @@
-// This is your Prisma schema file,
-// learn more about it in the docs: https://pris.lyd/prisma-schema
-
 generator client {
   provider        = "prisma-client-js"
   previewFeatures = ["driverAdapters"]
@@ -10,47 +7,281 @@ datasource db {
   provider = "postgresql"
 }
 
-// User Roles
+model User {
+  id               String     @id @default(uuid())
+  email            String     @unique
+  password_hash    String
+  nombre           String?
+  apellido         String?
+  telefono_celular String?
+  cargo            String?
+  status           UserStatus @default(ACTIVE)
+  role             UserRole   @default(CLIENTE)
+  is_active        Boolean    @default(true)
+  created_at       DateTime   @default(now())
+  updated_at       DateTime   @updatedAt
+  roles_id         String?
+  accounts         Account[]
+  Customer         Customer?
+  sessions         Session[]
+  roles            Role?      @relation(fields: [roles_id], references: [id])
+}
+
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String?
+  access_token      String?
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String?
+  session_state     String?
+  user              User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+}
+
+model Customer {
+  id                                  String         @id @default(uuid())
+  user_id                             String?        @unique
+  type                                CustomerType
+  tipo_doc_identidad                  DocumentType?
+  name                                String
+  doc_number                          String         @unique
+  telefono_empresa                    String?
+  telefono_celular                    String?
+  email                               String?
+  direccion_fiscal                    String?
+  settings                            Json?
+  status                              CustomerStatus @default(ACTIVE)
+  documents                           Json?
+  bank_account_info                   Json?
+  socios_info                         Json?
+  persona_contacto_info               Json?
+  representante_legal_info            Json?
+  fecha_constitucion                  DateTime?
+  urbanizacion                        String?
+  ciudad                              String?
+  estado                              String?
+  pais                                String?
+  codigo_postal                       String?
+  rubro                               Rubro?
+  que_vendes                          String?
+  tipo_venta                          SaleType?
+  figura_legal                        LegalFigure?
+  tipo_empresa                        CompanyType?
+  descripcion_ventas                  String?
+  sitio_web                           String?
+  is_agente_retencion                 Boolean        @default(false)
+  porcent_retencion_islr              Decimal?       @db.Decimal(5, 2)
+  porcent_retencion_iva               Decimal?       @db.Decimal(5, 2)
+  porcent_retencion_municipio         Decimal?       @db.Decimal(5, 2)
+  fecha_registro                      DateTime?
+  ip_registro                         String?
+  fecha_eliminacion                   DateTime?
+  ip_eliminacion                      String?
+  is_acepta_terminos                  Boolean        @default(false)
+  fecha_acepta_terminos               DateTime?
+  ip_acepta_terminos                  String?
+  is_acepta_boletin                   Boolean        @default(false)
+  fecha_acepta_boletin                DateTime?
+  ip_acepta_boletin                   String?
+  is_acepta_declaracion_jurada        Boolean        @default(false)
+  fecha_declaracion_jurada            DateTime?
+  ip_declaracion_jurada               String?
+  email_user_masiva_SMS               String?
+  email_user_masiva_whatsapp          String?
+  solo_enviar_cobro_contacto_oobranza Boolean        @default(false)
+  created_at                          DateTime       @default(now())
+  updated_at                          DateTime       @updatedAt
+  user                                User?          @relation(fields: [user_id], references: [id])
+  invoices                            Invoice[]
+}
+
+model Product {
+  id             String         @id @default(uuid())
+  name           String         @unique
+  type           ProductType
+  billing_cycle  BillingCycle? // Nullable for ONE_TIME products
+  categoryId     String?        // Foreign key for Category
+  category       Category?      @relation(fields: [categoryId], references: [id])
+  created_at     DateTime       @default(now())
+  updated_at     DateTime       @updatedAt
+  invoice_items  InvoiceItem[]
+  product_prices ProductPrice[]
+}
+
+model PriceList {
+  id             String         @id @default(uuid())
+  name           String         @unique
+  created_at     DateTime       @default(now())
+  updated_at     DateTime       @updatedAt
+  product_prices ProductPrice[]
+}
+
+model ProductPrice {
+  id            String    @id @default(uuid())
+  product_id    String
+  price_list_id String
+  price_usd     Decimal   @db.Decimal(10, 2)
+  created_at    DateTime  @default(now())
+  updated_at    DateTime  @updatedAt
+  priceList     PriceList @relation(fields: [price_list_id], references: [id])
+  product       Product   @relation(fields: [product_id], references: [id])
+
+  @@unique([product_id, price_list_id])
+}
+
+model Invoice {
+  id                           String        @id @default(uuid())
+  customer_id                  String
+  type                         InvoiceType
+  status                       InvoiceStatus @default(DRAFT)
+  issue_date                   DateTime      @default(now())
+  due_date                     DateTime
+  currency_rate                Decimal       @db.Decimal(10, 4)
+  subtotal_usd                 Decimal       @db.Decimal(10, 2)
+  tax_amount_usd               Decimal       @db.Decimal(10, 2)
+  total_usd                    Decimal       @db.Decimal(10, 2)
+  subtotal_bs                  Decimal       @db.Decimal(10, 2)
+  tax_amount_bs                Decimal       @db.Decimal(10, 2)
+  total_bs                     Decimal       @db.Decimal(10, 2)
+  retention_amount_bs          Decimal       @db.Decimal(10, 2)
+  proximo_vencimiento_producto DateTime?
+  created_at                   DateTime      @default(now())
+  updated_at                   DateTime      @updatedAt
+  customer                     Customer      @relation(fields: [customer_id], references: [id])
+  invoice_items                InvoiceItem[]
+}
+
+model InvoiceItem {
+  id             String   @id @default(uuid())
+  invoice_id     String
+  product_id     String
+  quantity       Int
+  unit_price_usd Decimal  @db.Decimal(10, 2)
+  total_usd      Decimal  @db.Decimal(10, 2)
+  created_at     DateTime @default(now())
+  updated_at     DateTime @updatedAt
+  invoice        Invoice  @relation(fields: [invoice_id], references: [id])
+  product        Product  @relation(fields: [product_id], references: [id])
+}
+
+model Modulo {
+  id          String         @id @default(uuid())
+  name        String         @unique
+  description String?
+  created_at  DateTime       @default(now())
+  updated_at  DateTime       @updatedAt
+  tipouser    Json?
+  path        String?
+  icon        String?
+  roles       ModuloToRole[]
+}
+
+model Role {
+  id         String         @id @default(uuid())
+  name       String         @unique
+  is_massiva Boolean        @default(false)
+  created_at DateTime       @default(now())
+  updated_at DateTime       @updatedAt
+  modulos    ModuloToRole[]
+  users      User[]
+}
+
+model Parametro {
+  id         String   @id @default(uuid())
+  key        String   @unique
+  value      String
+  updated_at DateTime @updatedAt
+  created_at DateTime @default(now())
+}
+
+model TasaBcv {
+  id             String    @id @default(uuid())
+  tasa           Decimal   @db.Decimal(10, 4)
+  fecha_efectiva DateTime  @unique @db.Date
+  fecha_creacion DateTime  @default(now())
+  fecha_inicio   DateTime  @db.Date
+  fecha_fin      DateTime? @db.Date
+  created_at     DateTime  @default(now())
+  updated_at     DateTime  @updatedAt
+}
+
+model ModuloToRole {
+  module_id   String
+  role_id     String
+  assigned_at DateTime @default(now())
+  assigned_by String
+  modulo      Modulo   @relation(fields: [module_id], references: [id])
+  role        Role     @relation(fields: [role_id], references: [id])
+
+  @@id([module_id, role_id])
+}
+
+model Category {
+  id          String    @id @default(uuid())
+  name        String    @unique
+  description String?
+  products    Product[]
+  created_at  DateTime  @default(now())
+  updated_at  DateTime  @updatedAt
+}
+
 enum UserRole {
   MASSIVA_ADMIN
   MASSIVA_EXTRA
   CLIENTE
 }
 
-// Customer Types
 enum CustomerType {
   PERSONA
   EMPRESA
 }
 
-// Document Types for customers (e.g., J, V, E, P, G for Venezuela)
 enum DocumentType {
-  J // Juridical (RIF for companies)
-  V // Venezuelan Citizen (Cedula de Identidad)
-  E // Foreigner (Cedula de Identidad)
-  P // Passport
-  G // Government
+  J
+  V
+  E
+  P
+  G
 }
 
-// Product Types
 enum ProductType {
   RECURRENT
   ONE_TIME
 }
 
-// Billing Cycles
 enum BillingCycle {
   MONTHLY
   BIMONTHLY
 }
 
-// Invoice Types
 enum InvoiceType {
   FACTURA
   RECIBO
 }
 
-// Invoice Statuses
 enum InvoiceStatus {
   DRAFT
   SENT
@@ -60,7 +291,6 @@ enum InvoiceStatus {
   CANCELLED
 }
 
-// Customer Statuses
 enum CustomerStatus {
   ACTIVE
   INACTIVE
@@ -69,7 +299,6 @@ enum CustomerStatus {
   PAUSED
 }
 
-// Rubro (Business Sector) for customers
 enum Rubro {
   TELECOMUNICACIONES
   SEGUROS
@@ -97,21 +326,18 @@ enum Rubro {
   OTRO
 }
 
-// Type of Sale
 enum SaleType {
   MAYOR
   DETAL
   MAYOR_Y_DETAL
 }
 
-// Legal Figure
 enum LegalFigure {
   PERSONA_JURIDICA
   GOBIERNO_EMPRENDEDOR_CON_FIRMA_PERSONAL
   EMPRENDEDOR_SOLO_CON_RIF
 }
 
-// Company Type
 enum CompanyType {
   EMPRESA
   FABRICANTE
@@ -126,258 +352,10 @@ enum CompanyType {
   FARMACIA
 }
 
-
-// User Statuses
 enum UserStatus {
   ACTIVE
   INACTIVE
   RESET
   BLOCKED
   PAUSED
-}
-
-model User {
-  id               String      @id @default(uuid())
-  email            String      @unique
-  password_hash    String
-  nombre           String?
-  apellido         String?
-  telefono_celular String?
-  cargo            String?
-  status           UserStatus  @default(ACTIVE)
-  role             UserRole    @default(CLIENTE)
-  is_active        Boolean     @default(true)
-  created_at       DateTime    @default(now())
-  updated_at       DateTime    @updatedAt
-  Customer         Customer?
-  roles_id         String?
-  roles            Role?       @relation(fields: [roles_id], references: [id])
-  // Add relation for NextAuth.js
-  accounts         Account[]
-  sessions         Session[]
-}
-
-model Account {
-  id                String  @id @default(cuid())
-  userId            String
-  type              String
-  provider          String
-  providerAccountId String
-  refresh_token     String? @db.Text
-  access_token      String? @db.Text
-  expires_at        Int?
-  token_type        String?
-  scope             String?
-  id_token          String? @db.Text
-  session_state     String?
-
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  @@unique([provider, providerAccountId])
-}
-
-model Session {
-  id           String   @id @default(cuid())
-  sessionToken String   @unique
-  userId       String
-  expires      DateTime
-  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-}
-
-model VerificationToken {
-  identifier String
-  token      String   @unique
-  expires    DateTime
-
-  @@unique([identifier, token])
-}
-
-
-model Customer {
-  id                         String         @id @default(uuid())
-  user_id                    String?        @unique // Foreign key to User, nullable for leads/non-user customers
-  type                       CustomerType
-  tipo_doc_identidad         DocumentType?
-  name                       String
-  doc_number                 String         @unique // RIF/CI
-  telefono_empresa           String?
-  telefono_celular           String?
-  email                      String?
-  direccion_fiscal           String?
-  
-  settings                   Json?          // JSONB: price_list_id, admits_receipt, send_alerts_to
-  status                     CustomerStatus @default(ACTIVE)
-  documents                  Json?          // jsonb, array de {fileName, url_supabase}
-  bank_account_info          Json?          // jsonb: nombre_titular, nro_documento_identidad, nro_cuenta, codigo_banco, nombre_banco, is_transferencia_nacional, is_pago_movil, is_transferencia_internacional, nro_telefono_pago_movil
-  socios_info                Json?          // jsonb: nombre, email, telefono_celular, cargo, cedula
-  persona_contacto_info      Json?          // jsonb: nombre, email, telefono_celular, cargo, cedula
-  representante_legal_info   Json?          // jsonb: nombre, email, telefono_celular, cargo, cedula
-
-  // Additional profile fields from PRD
-  fecha_constitucion         DateTime?
-  urbanizacion               String?
-  ciudad                     String?
-  estado                     String?
-  pais                       String?
-  codigo_postal              String?
-  rubro                      Rubro?
-  que_vendes                 String? // Productos, servicios, Productos y Servicios (Text or could be Enum)
-  tipo_venta                 SaleType?
-  figura_legal               LegalFigure?
-  tipo_empresa               CompanyType?
-  descripcion_ventas         String?        @db.Text
-  sitio_web                  String?
-  is_agente_retencion        Boolean        @default(false)
-  porcent_retencion_islr     Decimal?       @db.Decimal(5, 2) // Max 99.99%
-  porcent_retencion_iva      Decimal?       @db.Decimal(5, 2) // Max 99.99%
-  porcent_retencion_municipio Decimal?      @db.Decimal(5, 2) // Max 99.99%
-
-  fecha_registro             DateTime?
-  ip_registro                String?
-  fecha_eliminacion          DateTime?
-  ip_eliminacion             String?
-  is_acepta_terminos         Boolean        @default(false)
-  fecha_acepta_terminos      DateTime?
-  ip_acepta_terminos         String?
-  is_acepta_boletin          Boolean        @default(false)
-  fecha_acepta_boletin       DateTime?
-  ip_acepta_boletin          String?
-  is_acepta_declaracion_jurada Boolean      @default(false)
-  fecha_declaracion_jurada   DateTime?
-  ip_declaracion_jurada      String?
-
-  email_user_masiva_SMS      String?
-  email_user_masiva_whatsapp String?
-  solo_enviar_cobro_contacto_oobranza Boolean @default(false) // Assuming this is a boolean based on context
-
-  created_at                 DateTime       @default(now())
-  updated_at                 DateTime       @updatedAt
-
-  user                       User?          @relation(fields: [user_id], references: [id])
-  invoices                   Invoice[]
-}
-
-model Product {
-  id             String         @id @default(uuid())
-  name           String         @unique
-  type           ProductType
-  billing_cycle  BillingCycle? // Nullable for ONE_TIME products
-  created_at     DateTime       @default(now())
-  updated_at     DateTime       @updatedAt
-  product_prices ProductPrice[]
-  invoice_items  InvoiceItem[]
-}
-
-model PriceList {
-  id             String         @id @default(uuid())
-  name           String         @unique
-  created_at     DateTime       @default(now())
-  updated_at     DateTime       @updatedAt
-  product_prices ProductPrice[]
-}
-
-model ProductPrice {
-  id            String    @id @default(uuid())
-  product_id    String
-  price_list_id String
-  price_usd     Decimal   @db.Decimal(10, 2) // Max 99,999,999.99 USD
-  created_at    DateTime  @default(now())
-  updated_at    DateTime  @updatedAt
-  
-  product   Product   @relation(fields: [product_id], references: [id])
-  priceList PriceList @relation(fields: [price_list_id], references: [id])
-
-  @@unique([product_id, price_list_id])
-}
-
-model Invoice {
-  id                   String        @id @default(uuid())
-  customer_id          String
-  type                 InvoiceType
-  status               InvoiceStatus @default(DRAFT)
-  issue_date           DateTime      @default(now())
-  due_date             DateTime
-  currency_rate        Decimal       @db.Decimal(10, 4) // Example: 54.3000 for BCV rate
-  subtotal_usd         Decimal       @db.Decimal(10, 2)
-  tax_amount_usd       Decimal       @db.Decimal(10, 2)
-  total_usd            Decimal       @db.Decimal(10, 2)
-  subtotal_bs          Decimal       @db.Decimal(10, 2)
-  tax_amount_bs        Decimal       @db.Decimal(10, 2)
-  total_bs             Decimal       @db.Decimal(10, 2)
-  retention_amount_bs  Decimal       @db.Decimal(10, 2) // Amount retained by the customer
-  proximo_vencimiento_producto DateTime? // Next due date for the product related to this invoice
-  created_at           DateTime      @default(now())
-  updated_at           DateTime      @updatedAt
-
-  customer      Customer      @relation(fields: [customer_id], references: [id])
-  invoice_items InvoiceItem[]
-}
-
-model InvoiceItem {
-  id            String    @id @default(uuid())
-  invoice_id    String
-  product_id    String
-  quantity      Int
-  unit_price_usd Decimal  @db.Decimal(10, 2)
-  total_usd     Decimal  @db.Decimal(10, 2)
-  created_at    DateTime  @default(now())
-  updated_at    DateTime  @updatedAt
-
-  invoice Invoice @relation(fields: [invoice_id], references: [id])
-  product Product @relation(fields: [product_id], references: [id])
-}
-
-model Modulo {
-  id          String   @id @default(uuid())
-  name        String   @unique
-  path        String?
-  icon        String? // Added icon field
-  description String?
-  tipouser    Json?
-  created_at  DateTime @default(now())
-  updated_at  DateTime @updatedAt
-  roles       ModuloToRole[]
-}
-
-model Role {
-  id         String   @id @default(uuid())
-  name       String   @unique // e.g., "Cobrador", "Administrador de Clientes"
-  is_massiva Boolean  @default(false)
-  created_at DateTime @default(now())
-  updated_at DateTime @updatedAt
-  users      User[]
-  modulos    ModuloToRole[]
-}
-
-model Parametro {
-  id         String    @id @default(uuid())
-  key        String    @unique // e.g., 'tasa_bcv'
-  value      String // JSONB or Text, using String for simplicity, can parse as JSON in application
-  updated_at DateTime  @updatedAt
-  created_at DateTime @default(now())
-}
-
-model TasaBcv {
-  id             String    @id @default(uuid())
-  tasa           Decimal   @db.Decimal(10, 4)
-  fecha_efectiva DateTime  @db.Date // This will store the "fecha valor" from BCV, as a date only
-  fecha_creacion DateTime  @default(now())
-  fecha_inicio   DateTime  @db.Date // Date range start
-  fecha_fin      DateTime? @db.Date // Date range end, nullable
-
-  created_at DateTime @default(now())
-  updated_at DateTime @updatedAt
-
-  @@unique([fecha_efectiva]) // Ensure only one rate per effective date
-}
-
-model ModuloToRole {
-  modulo      Modulo @relation(fields: [module_id], references: [id])
-  module_id   String
-  role        Role   @relation(fields: [role_id], references: [id])
-  role_id     String
-  assigned_at DateTime @default(now())
-  assigned_by String // Can store user ID or name of who assigned it
-
-  @@id([module_id, role_id])
 }

@@ -9,6 +9,9 @@ const formSchema = z.object({
   }),
   type: z.nativeEnum(ProductType),
   billing_cycle: z.nativeEnum(BillingCycle).nullable(),
+  categoryId: z.string().min(1, {
+    message: "La categoría es obligatoria.",
+  }),
 }).refine(data => data.type !== 'RECURRENT' || data.billing_cycle !== null, {
     message: "El ciclo de facturación es obligatorio para productos recurrentes.",
     path: ["billing_cycle"],
@@ -44,15 +47,13 @@ export async function GET(req: NextRequest) { // Added req: NextRequest
             priceList: true,
           },
         },
+        category: true, // Include the category relation
       },
     });
 
     // Manually serialize Decimal types to numbers for client-side consumption
     const serializedProducts = products.map(product => {
-      // If a specific priceListId is filtered, ensure only those prices are passed
-      const filteredPrices = priceListId
-        ? product.product_prices.filter(pp => pp.priceListId === priceListId)
-        : product.product_prices;
+      const filteredPrices = product.product_prices;
 
       return {
         ...product,
@@ -89,6 +90,7 @@ export async function POST(req: NextRequest) {
         name: validatedData.name,
         type: validatedData.type,
         billing_cycle: validatedData.billing_cycle,
+        categoryId: validatedData.categoryId,
       },
     });
 

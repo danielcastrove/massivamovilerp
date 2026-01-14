@@ -75,14 +75,9 @@ export function Sidebar() {
   const isLoading = status === 'loading' || loadingModules;
 
   return (
-    <div className={cn("hidden md:block border-r bg-background text-foreground transition-all duration-300")}>
+    <div className={cn("sticky top-0 h-screen hidden md:block border-r bg-background text-foreground transition-all duration-300")}>
       <div className={cn("flex h-full max-h-screen flex-col gap-2", isCollapsed && "overflow-hidden")}>
-        <div className="flex h-[60px] items-center border-b px-4">
-          <Link href="/" className="flex items-center gap-2 font-semibold">
-            <Package2 className="h-6 w-6" />
-            <span className={cn({ "hidden": isCollapsed })}>MassivaMovil ERP</span>
-          </Link>
-        </div>
+
         <div className="flex-1 overflow-auto py-2">
           <nav className="grid items-start px-2 text-sm font-medium">
             {isLoading ? (
@@ -96,15 +91,15 @@ export function Sidebar() {
                   <Link
                     key={label}
                     href={href}
-                    className={cn("flex items-center gap-3 rounded-lg px-3 py-2 transition-all", pathname === href ? "text-white bg-cyan-700" : "text-black hover:text-white hover:bg-cyan-500")}
+                    className={cn("flex items-center gap-3 rounded-lg px-3 py-2 transition-all", pathname === href ? "text-white bg-cyan-500" : "text-black hover:text-white hover:bg-cyan-500")}
                   >
-                    <Icon className="h-4 w-4" />
+                    <Icon className="h-4 w-4 text-cyan-500" />
                     <span className={cn("truncate", { "hidden": isCollapsed })}>{label}</span>
                   </Link>
                 ))}
 
                 {/* Separator if there are dynamic links */}
-                {dynamicLinks.length > 0 && <div className="my-2 h-px bg-gray-200 dark:bg-gray-700" />}
+                {dynamicLinks.length > 0 && <div className="my-2 h-px bg-gray-200 dark:bg-gray-500" />}
 
                 {/* Render dynamic links from the API */}
                 {dynamicLinks.map((link) => {
@@ -113,9 +108,9 @@ export function Sidebar() {
                     <Link
                       key={link.name}
                       href={link.path}
-                      className={cn("flex items-center gap-3 rounded-lg px-3 py-2 transition-all", pathname === link.path ? "text-white bg-cyan-700" : "text-black hover:text-white hover:bg-cyan-500")}
+                      className={cn("flex items-center gap-3 rounded-lg px-3 py-2 transition-all", pathname === link.path ? "text-white bg-cyan-500" : "text-black hover:text-white hover:bg-cyan-500")}
                     >
-                      <Icon className="h-4 w-4" />
+                      <Icon className="h-4 w-4 text-cyan-500" />
                       <span className={cn("truncate", { "hidden": isCollapsed })}>{link.name}</span>
                     </Link>
                   );

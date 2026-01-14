@@ -201,8 +201,8 @@ export function AssignPricesTab() {
             </Select>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setLinkDialogOpen(false)}>Cancelar</Button>
-            <Button onClick={handleLinkProduct} disabled={!productToLink || isSaving}>
+            <Button className="bg-cyan-500 hover:bg-cyan-600 text-white" onClick={() => setLinkDialogOpen(false)}>Cancelar</Button>
+            <Button onClick={handleLinkProduct} disabled={!productToLink || isSaving} className="bg-cyan-500 hover:bg-cyan-600 text-white">
                 {isSaving ? <Loader className="mr-2 h-4 w-4 animate-spin"/> : null} Enlazar
             </Button>
           </DialogFooter>
@@ -240,7 +240,7 @@ export function AssignPricesTab() {
                         {selectedList ? `Editando precios para la lista "${priceLists.find(l => l.id === selectedList)?.name}"` : "Selecciona una lista."}
                         </CardDescription>
                     </div>
-                    {selectedList && <Button variant="outline" size="sm" onClick={() => setLinkDialogOpen(true)}><PlusCircle className="mr-2 h-4 w-4"/>Enlazar Producto</Button>}
+                    {selectedList && <Button size="sm" onClick={() => setLinkDialogOpen(true)} className="bg-cyan-500 hover:bg-cyan-600 text-white"><PlusCircle className="mr-2 h-4 w-4"/>Enlazar Producto</Button>}
                 </div>
             </CardHeader>
             <CardContent>
@@ -278,7 +278,7 @@ export function AssignPricesTab() {
               <CardFooter className="flex flex-col items-end gap-4 pt-4">
                   {saveSuccess && <Alert className="w-full"><CheckCircle className="h-4 w-4" /><AlertTitle>Éxito</AlertTitle><AlertDescription>{saveSuccess}</AlertDescription></Alert>}
                   {saveError && <Alert variant="destructive" className="w-full"><AlertCircle className="h-4 w-4" /><AlertTitle>Error</AlertTitle><AlertDescription>{saveError}</AlertDescription></Alert>}
-                <Button onClick={handleSavePrices} disabled={!bcvRate || loadingPrices || isSaving}>
+                <Button onClick={handleSavePrices} disabled={!bcvRate || loadingPrices || isSaving} className="bg-cyan-500 hover:bg-cyan-600 text-white">
                   {isSaving ? <><Loader className="h-4 w-4 animate-spin mr-2" />Guardando...</> : "Guardar Precios"}
                 </Button>
               </CardFooter>

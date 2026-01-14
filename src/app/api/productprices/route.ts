@@ -63,28 +63,60 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ error: 'Falta el ID del producto o de la lista de precios.' }, { status: 400 });
     }
 
-    let whereClause = {};
-    let selectClause = {};
-
     if (price_list_id) {
-        whereClause = { price_list_id: price_list_id };
-        selectClause = { product_id: true, price_usd: true };
+      // Fetch prices for a given price list, including product and category details
+      const prices = await prisma.productPrice.findMany({
+        where: { price_list_id: price_list_id },
+        include: {
+          product: {
+            include: {
+              category: true,
+            },
+          },
+        },
+      });
+
+      // Fetch the latest BCV rate
+      const bcvRateParam = await prisma.parametro.findUnique({
+        where: { key: 'tasa_bcv' },
+      });
+      const bcvRate = bcvRateParam ? parseFloat(bcvRateParam.value) : null;
+      
+      const serializedPrices = (prices || []).map(price => {
+        const price_usd = price.price_usd.toNumber();
+        const approx_price_bs = bcvRate ? price_usd * bcvRate : null;
+
+        return {
+            ...price,
+            price_usd: price_usd,
+            approx_price_bs: approx_price_bs,
+            product: price.product ? {
+                ...price.product,
+                category: price.product.category ? { id: price.product.category.id, name: price.product.category.name } : null,
+            } : undefined,
+        };
+      });
+      return NextResponse.json(serializedPrices);
+
     } else if (product_id) {
-        whereClause = { product_id: product_id };
-        selectClause = { price_list_id: true, price_usd: true };
+      // Fetch prices for a given product across all price lists
+      const prices = await prisma.productPrice.findMany({
+        where: { product_id: product_id },
+        include: {
+          priceList: true, // Include priceList details
+        },
+      });
+      
+      const serializedPrices = (prices || []).map(price => ({
+        ...price,
+        price_usd: price.price_usd.toNumber(),
+      }));
+      return NextResponse.json(serializedPrices);
     }
 
-    const prices = await prisma.productPrice.findMany({
-      where: whereClause,
-      select: selectClause,
-    });
+    // This part should not be reached if the initial check is correct, but as a fallback:
+    return NextResponse.json({ error: 'Condición no manejada.' }, { status: 400 });
 
-    const serializedPrices = prices.map(price => ({
-      ...price,
-      price_usd: price.price_usd.toNumber(),
-    }));
-
-    return NextResponse.json(serializedPrices);
   } catch (error) {
     console.error('Error fetching product prices:', error);
     return NextResponse.json({ message: 'Error interno del servidor' }, { status: 500 });

@@ -1,6 +1,6 @@
 
-import { prisma } from '../src/lib/db.js';
-import { GET } from '../src/app/api/cron/bcv/route.js';
+import { prisma } from '../src/lib/db';
+import { GET } from '../src/app/api/cron/bcv/route';
 import axios from 'axios';
 
 // Helper to create a mock HTML response for axios

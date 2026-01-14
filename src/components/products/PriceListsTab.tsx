@@ -4,12 +4,13 @@ import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { MoreHorizontal, Loader, AlertCircle, Trash2 } from "lucide-react"; // Added Trash2
+import { MoreHorizontal, Loader, AlertCircle, Trash2, Eye, Pencil } from "lucide-react"; // Added Trash2
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogDescription, DialogFooter } from "@/components/ui/dialog"; // Added DialogFooter
 import { PriceListForm } from "./PriceListForm";
 import * as z from "zod";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { PriceListDetailsModal } from "./PriceListDetailsModal";
 
 const formSchema = z.object({
   name: z.string().min(2, {
@@ -37,6 +38,11 @@ export function PriceListsTab() {
   // State for Delete Dialog
   const [isDeleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [deletingPriceListId, setDeletingPriceListId] = useState<string | null>(null);
+  
+  // State for PriceList Details Modal
+  const [isDetailsModalOpen, setDetailsModalOpen] = useState(false);
+  const [selectedPriceListId, setSelectedPriceListId] = useState<string | null>(null);
+  const [selectedPriceListName, setSelectedPriceListName] = useState<string>('');
   
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
@@ -152,6 +158,12 @@ export function PriceListsTab() {
     setDeleteDialogOpen(true);
   };
 
+  const openDetailsModal = (priceList: PriceList) => {
+    setSelectedPriceListId(priceList.id);
+    setSelectedPriceListName(priceList.name);
+    setDetailsModalOpen(true);
+  };
+
 
   if (loading) {
     return (
@@ -247,7 +259,7 @@ export function PriceListsTab() {
             </Alert>
           )}
           <DialogFooter className="mt-4">
-            <Button variant="outline" onClick={() => setDeleteDialogOpen(false)} disabled={isSubmitting}>
+            <Button className="bg-cyan-500 hover:bg-cyan-600 text-white" onClick={() => setDeleteDialogOpen(false)} disabled={isSubmitting}>
               Cancelar
             </Button>
             <Button variant="destructive" onClick={handleDelete} disabled={isSubmitting}>
@@ -264,12 +276,19 @@ export function PriceListsTab() {
         </DialogContent>
       </Dialog>
 
+      {/* PriceList Details Modal */}
+      <PriceListDetailsModal
+        priceListId={selectedPriceListId}
+        priceListName={selectedPriceListName}
+        isOpen={isDetailsModalOpen}
+        onClose={() => setDetailsModalOpen(false)}
+      />
 
       <Card>
         <CardHeader>
           <div className="flex items-center justify-between">
             <CardTitle>Listas de Precios</CardTitle>
-            <Button onClick={() => setCreateDialogOpen(true)}>Crear Nueva Lista</Button>
+            <Button className="bg-cyan-500 hover:bg-cyan-600 text-white" onClick={() => setCreateDialogOpen(true)}>Crear Nueva Lista</Button>
           </div>
         </CardHeader>
         <CardContent>
@@ -299,15 +318,18 @@ export function PriceListsTab() {
                             <span className="sr-only">Toggle menu</span>
                           </Button>
                         </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end">
-                          <DropdownMenuLabel>Acciones</DropdownMenuLabel>
-                          <DropdownMenuItem onClick={() => openEditDialog(list)}>
-                            Editar
-                          </DropdownMenuItem>
-                          <DropdownMenuItem className="text-red-500" onClick={() => openDeleteDialog(list.id)}>
-                            Eliminar
-                          </DropdownMenuItem>
-                        </DropdownMenuContent>
+                          <DropdownMenuContent align="end">
+                            <DropdownMenuLabel>Acciones</DropdownMenuLabel>
+                            <DropdownMenuItem onClick={() => openDetailsModal(list)}>
+                              <Eye className="mr-2 h-4 w-4" /> Ver
+                            </DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => openEditDialog(list)}>
+                              <Pencil className="mr-2 h-4 w-4" /> Editar
+                            </DropdownMenuItem>
+                            <DropdownMenuItem className="text-red-500" onClick={() => openDeleteDialog(list.id)}>
+                              <Trash2 className="mr-2 h-4 w-4" /> Eliminar
+                            </DropdownMenuItem>
+                          </DropdownMenuContent>
                       </DropdownMenu>
                     </TableCell>
                   </TableRow>

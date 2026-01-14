@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import Image from 'next/image'; // Import Image component
 import { CircleUser, Menu, Package2, Home, DollarSign, Users, Settings, LayoutGrid } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -44,7 +45,7 @@ export function Header() {
   })) || [];
 
   return (
-    <header className="flex h-14 items-center gap-4 border-b bg-background px-4 lg:h-[60px] lg:px-6">
+    <header className="sticky top-0 z-50 flex h-14 items-center gap-4 border-b bg-background px-4 lg:h-[60px] lg:px-6">
       {/* --- Mobile Sidebar --- */}
       <Sheet>
         <SheetTrigger asChild>
@@ -105,7 +106,11 @@ export function Header() {
       </Button>
 
       {/* --- Header Content (Right Side) --- */}
-      <div className="w-full flex-1" /> {/* This is a spacer */}
+      <div className="flex-1 flex justify-center items-center">
+        <Link href="/">
+          <Image src="/massivamovil.png" alt="MassivaMovil ERP" width={150} height={30} className="object-contain" />
+        </Link>
+      </div>
       
       <DropdownMenu>
         <DropdownMenuTrigger asChild>

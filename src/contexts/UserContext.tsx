@@ -40,7 +40,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const isAuthLoading = status === 'loading';
   const isAuthenticated = status === 'authenticated';
 
-  const login = useCallback(async (email, password) => {
+  const login = useCallback(async (email: string, password: string) => {
     try {
       const result = await nextAuthSignIn('credentials', {
         redirect: false,

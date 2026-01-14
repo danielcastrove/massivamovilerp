@@ -32,7 +32,7 @@ export async function GET() {
       throw new Error(`No se encontró una tasa de BCV activa para hoy: ${todayInVenezuela.toISOString().split('T')[0]}`);
     }
 
-    const rateValue = activeRate.tasa.toLocaleString('es-VE', { minimumFractionDigits: 4, maximumFractionDigits: 4 });
+    const rateValue = Number(activeRate.tasa).toLocaleString('es-VE', { minimumFractionDigits: 4, maximumFractionDigits: 4 });
     const fechaInicio = activeRate.fecha_inicio.toISOString().split('T')[0];
     const fechaFin = activeRate.fecha_fin?.toISOString().split('T')[0];
 
@@ -42,7 +42,7 @@ export async function GET() {
       create: { key: 'tasa_bcv', value: rateValue },
     });
 
-    console.log(`Active BCV rate updated in Parametro: ${rateValue}`);
+    // console.log(`Active BCV rate updated in Parametro: ${rateValue}`);
     
     const emailHtml = `
       <div style="text-align: center; font-family: Arial, sans-serif; color: #333;">

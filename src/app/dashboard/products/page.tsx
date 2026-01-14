@@ -12,9 +12,9 @@ export default function ProductsPage() {
 
       <Tabs defaultValue="services" className="space-y-4">
         <TabsList>
-          <TabsTrigger value="services">Servicios</TabsTrigger>
-          <TabsTrigger value="price_lists">Listas de Precios</TabsTrigger>
-          <TabsTrigger value="assign_prices">Asignar Precios</TabsTrigger>
+          <TabsTrigger value="services" className="data-[state=active]:bg-cyan-500 data-[state=active]:text-white">Servicios</TabsTrigger>
+          <TabsTrigger value="price_lists" className="data-[state=active]:bg-cyan-500 data-[state=active]:text-white">Listas de Precios</TabsTrigger>
+          <TabsTrigger value="assign_prices" className="data-[state=active]:bg-cyan-500 data-[state=active]:text-white">Asignar Precios</TabsTrigger>
         </TabsList>
         
         <TabsContent value="services" className="space-y-4">

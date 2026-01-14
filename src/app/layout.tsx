@@ -40,6 +40,11 @@ function AppContent({ children }: { children: React.ReactNode }) {
   const router = useRouter();
 
   useEffect(() => {
+    // Set the browser tab title
+    document.title = "MassivaMovil ERP";
+  }, []);
+
+  useEffect(() => {
     if (!isAuthLoading && !isAuthenticated && !isAuthRoute) {
       router.push('/auth/login');
     }

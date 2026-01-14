@@ -42,7 +42,7 @@ export function PriceListForm({ onSubmit, defaultValues, isSubmitting }: PriceLi
             </FormItem>
           )}
         />
-        <Button type="submit" disabled={isSubmitting}>
+        <Button type="submit" disabled={isSubmitting} className="bg-cyan-500 hover:bg-cyan-600 text-white">
           {isSubmitting && <Loader className="mr-2 h-4 w-4 animate-spin" />}
           {isSubmitting ? "Guardando..." : "Guardar"}
         </Button>

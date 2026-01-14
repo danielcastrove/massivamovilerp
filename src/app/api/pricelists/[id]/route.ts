@@ -8,9 +8,12 @@ const formSchema = z.object({
   }),
 });
 
-export async function PUT(req: NextRequest, context: { params: { id: string } }) {
+export async function PUT(
+  req: NextRequest,
+  { params }: { params: Promise<{ id: string }> } // <-- Debe ser Promise aquí
+) {
   try {
-    const { id } = await context.params; // Correctly await context.params
+    const { id } = await params; // <-- Y await aquí
     if (!id) {
       return NextResponse.json({ error: 'ID de lista de precios no proporcionado.' }, { status: 400 });
     }
@@ -46,9 +49,12 @@ export async function PUT(req: NextRequest, context: { params: { id: string } })
   }
 }
 
-export async function DELETE(req: NextRequest, context: { params: { id: string } }) {
+export async function DELETE(
+  req: NextRequest,
+  { params }: { params: Promise<{ id: string }> } // <-- Debe ser Promise aquí
+) {
   try {
-    const { id } = await context.params; // Correctly await context.params
+    const { id } = await params; // <-- Y await aquí
     if (!id) {
       return NextResponse.json({ error: 'ID de lista de precios no proporcionado.' }, { status: 400 });
     }

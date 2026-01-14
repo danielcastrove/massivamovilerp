@@ -9,7 +9,7 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Loader } from "lucide-react";
-import { ProductType, BillingCycle } from "@prisma/client";
+import { ProductType, BillingCycle, Category } from "@prisma/client";
 
 const formSchema = z.object({
   name: z.string().min(2, {
@@ -17,10 +17,14 @@ const formSchema = z.object({
   }),
   type: z.nativeEnum(ProductType),
   billing_cycle: z.nativeEnum(BillingCycle).nullable(),
+  categoryId: z.string().min(1, {
+    message: "Debe seleccionar una categoría.",
+  }),
 }).refine(data => data.type !== 'RECURRENT' || data.billing_cycle !== null, {
     message: "El ciclo de facturación es obligatorio para productos recurrentes.",
     path: ["billing_cycle"],
-});
+}); // <-- Missing closing parenthesis and curly brace
+
 
 interface ServiceFormProps {
   onSubmit: (values: z.infer<typeof formSchema>) => void;
@@ -31,10 +35,38 @@ interface ServiceFormProps {
 export function ServiceForm({ onSubmit, defaultValues, isSubmitting }: ServiceFormProps) {
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
-    defaultValues: defaultValues || { name: "", type: "RECURRENT", billing_cycle: "MONTHLY" },
+    defaultValues: defaultValues || { name: "", type: "RECURRENT", billing_cycle: "MONTHLY", categoryId: "" },
   });
 
   const productType = form.watch("type");
+
+  const [categories, setCategories] = React.useState<Category[]>([]);
+  const [isLoadingCategories, setIsLoadingCategories] = React.useState(true);
+  const [categoryError, setCategoryError] = React.useState<string | null>(null);
+
+  React.useEffect(() => {
+    const fetchCategories = async () => {
+      try {
+        const response = await fetch("/api/categories");
+        if (!response.ok) {
+          throw new Error("Failed to fetch categories");
+        }
+        const data: Category[] = await response.json();
+        setCategories(data);
+      } catch (err) {
+        if (err instanceof Error) {
+          setCategoryError(err.message);
+        } else {
+          setCategoryError("An unknown error occurred.");
+        }
+        console.error("Error fetching categories:", err);
+      } finally {
+        setIsLoadingCategories(false);
+      }
+    };
+
+    fetchCategories();
+  }, []);
 
   // Reset billing_cycle when type is not RECURRENT
   React.useEffect(() => {
@@ -55,6 +87,49 @@ export function ServiceForm({ onSubmit, defaultValues, isSubmitting }: ServiceFo
               <FormControl>
                 <Input placeholder="Ej: Saco de SMS 10k" {...field} />
               </FormControl>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+        <FormField
+          control={form.control}
+          name="categoryId"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel>Categoría</FormLabel>
+              <Select
+                onValueChange={field.onChange}
+                value={field.value}
+                disabled={isLoadingCategories || isSubmitting}
+              >
+                <FormControl>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Seleccione una categoría" />
+                  </SelectTrigger>
+                </FormControl>
+                <SelectContent>
+                  {isLoadingCategories && (
+                    <SelectItem value="loading" disabled>
+                      Cargando categorías...
+                    </SelectItem>
+                  )}
+                  {categoryError && (
+                    <SelectItem value="error" disabled>
+                      Error: {categoryError}
+                    </SelectItem>
+                  )}
+                  {!isLoadingCategories && !categoryError && categories.length === 0 && (
+                    <SelectItem value="no-categories" disabled>
+                      No hay categorías disponibles
+                    </SelectItem>
+                  )}
+                  {categories.map((category) => (
+                    <SelectItem key={category.id} value={category.id}>
+                      {category.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
               <FormMessage />
             </FormItem>
           )}
@@ -103,7 +178,7 @@ export function ServiceForm({ onSubmit, defaultValues, isSubmitting }: ServiceFo
             )}
             />
         )}
-        <Button type="submit" disabled={isSubmitting}>
+        <Button type="submit" disabled={isSubmitting} className="bg-cyan-500 hover:bg-cyan-600 text-white">
           {isSubmitting && <Loader className="mr-2 h-4 w-4 animate-spin" />}
           {isSubmitting ? "Guardando..." : "Guardar"}
         </Button>
@@ -111,3 +186,4 @@ export function ServiceForm({ onSubmit, defaultValues, isSubmitting }: ServiceFo
     </Form>
   );
 }
+

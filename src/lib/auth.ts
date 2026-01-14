@@ -5,10 +5,12 @@ import { compare } from 'bcrypt-ts';
 import { prisma } from './db';
 import { authConfig } from '../../auth.config'; // Import the base config
 import { PrismaAdapter } from "@auth/prisma-adapter";
+import { Adapter } from "next-auth/adapters";
+import { UserRole } from "@prisma/client";
 
 export const { handlers, auth, signIn, signOut } = NextAuth({
   ...authConfig,
-  adapter: PrismaAdapter(prisma),
+  adapter: PrismaAdapter(prisma) as Adapter,
   providers: [
     Credentials({
       async authorize(credentials) {
@@ -46,10 +48,13 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
   },
   callbacks: {
     async jwt({ token, user }) {
+      // This is the most important part.
+      // On initial sign-in, the `user` object is passed.
+      // We need to persist the data from the `user` object to the `token`.
       if (user) {
         token.id = user.id;
-        token.role = user.role;
-        token.isActive = user.is_active;
+        token.user_role = user.role; // Use user_role to avoid conflicts and match RLS
+        token.is_active = user.is_active;
         token.roles_id = user.roles_id;
 
         // Determine roleDisplayName
@@ -65,21 +70,36 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           });
           roleDisplayName = extraRole?.name || 'Extra';
         } else {
-          roleDisplayName = user.role; // Default to raw role if not matched
+          roleDisplayName = user.role;
         }
         token.roleDisplayName = roleDisplayName;
 
         // Fetch modules based on role
-        let modules = [];
+        interface ModuleToken {
+          id: string;
+          name: string;
+          path: string;
+        }
+        let modules: ModuleToken[] = [];
         if (user.role === 'MASSIVA_ADMIN') {
-          modules = await prisma.modulo.findMany();
+          const fetchedModules = await prisma.modulo.findMany();
+          modules = fetchedModules.map(m => ({
+            id: m.id,
+            name: m.name,
+            path: m.path || '', // Ensure path is a string
+          }));
         } else if (user.role === 'MASSIVA_EXTRA' && user.roles_id) {
           const roleModules = await prisma.moduloToRole.findMany({
             where: { role_id: user.roles_id },
             include: { modulo: true },
           });
-          modules = roleModules.map(rm => rm.modulo);
+          modules = roleModules.map(rm => ({
+            id: rm.modulo.id,
+            name: rm.modulo.name,
+            path: rm.modulo.path || '', // Ensure path is a string
+          }));
         } else if (user.role === 'CLIENTE') {
+          // Define specific modules for CLIENTE role
           modules = [{ id: 'client-portal', name: 'Portal de Cliente', path: '/client-portal' }];
         }
         token.modules = modules;
@@ -87,13 +107,15 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       return token;
     },
     async session({ session, token }) {
+      // The session callback receives the token from the jwt callback.
+      // We transfer the data from the token to the session object.
       if (session.user) {
         session.user.id = token.id as string;
-        session.user.role = token.role;
-        session.user.isActive = token.isActive;
+        session.user.role = token.user_role as UserRole; // Read from token.user_role
+        session.user.is_active = token.is_active as boolean;
         session.user.modules = token.modules as any[];
         session.user.roles_id = token.roles_id as string | null;
-        session.user.roleDisplayName = token.roleDisplayName as string; // Pass roleDisplayName to session
+        session.user.roleDisplayName = token.roleDisplayName as string;
       }
       return session;
     },
