@@ -1,6 +1,6 @@
 
 import { PrismaClient, UserRole } from '@prisma/client';
-import { hash } from 'bcrypt-ts';
+import { hash } from 'bcryptjs';
 
 const prisma = new PrismaClient();
 

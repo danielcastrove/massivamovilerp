@@ -30,6 +30,9 @@ const DefaultIcon = Package2; // Generic fallback icon
 // These links are always present and are not controlled by the database
 const staticNavLinks = [
   { href: "/dashboard", label: "Dashboard", icon: Home },
+];
+
+const staticNavLinksEnds = [
   { href: "/settings", label: "Configuración", icon: Settings },
 ];
 
@@ -115,6 +118,21 @@ export function Sidebar() {
                     </Link>
                   );
                 })}
+
+                {/* Separator if there are dynamic links */}
+                {dynamicLinks.length > 0 && <div className="my-2 h-px bg-gray-200 dark:bg-gray-500" />}
+
+                {/* Render static links */}
+                {staticNavLinksEnds.map(({ href, label, icon: Icon }) => (
+                  <Link
+                    key={label}
+                    href={href}
+                    className={cn("flex items-center gap-3 rounded-lg px-3 py-2 transition-all", pathname === href ? "text-white bg-cyan-500" : "text-black hover:text-white hover:bg-cyan-500")}
+                  >
+                    <Icon className="h-4 w-4 text-cyan-500" />
+                    <span className={cn("truncate", { "hidden": isCollapsed })}>{label}</span>
+                  </Link>
+                ))}
               </>
             )}
           </nav>

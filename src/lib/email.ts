@@ -18,8 +18,9 @@ export async function sendEmail({ to, subject, html }: MailOptions) {
   const portServer = process.env.EMAIL_SERVER_PORT ? parseInt(process.env.EMAIL_SERVER_PORT) : undefined;
   const emailUserServer = process.env.EMAIL_SERVER_USER;
   const passwordEmailUserServer = process.env.EMAIL_SERVER_PASSWORD;
-  const nameSendMail = process.env.EMAIL_FROM_NAME || 'MassivaMovil ERP';
+  const nameSendMail = 'Monitoreo MassivaMovil.com';
   const emailSendMail = process.env.EMAIL_FROM_ADDRESS || 'erp@massivamovil.com';
+  const copyEmail = process.env.COPY_EMAIL;
 
   // Validaciones de variables de entorno
   if (!emailApiBearerToken) {
@@ -57,7 +58,7 @@ export async function sendEmail({ to, subject, html }: MailOptions) {
       email_sendMail: emailSendMail,
       name_receiver: 'Administrador ERP', // Placeholder, se podría hacer dinámico
       email_receiver: to,
-      email_copy: '',
+      email_copy: copyEmail || '',
       email_copy_2: '',
       email_copy_hidden: '',
       email_copy_hidden_2: '',

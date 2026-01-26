@@ -1,3 +1,4 @@
+
 // massivamovilerp/src/components/customers/CustomerPageClient.tsx
 
 "use client";
@@ -11,98 +12,48 @@ import { CustomerFormModal } from "./CustomerFormModal"; // Import the modal
 // Define the Customer interface (already defined, keeping it for context)
 export interface Customer {
   id: string;
-  businessName: string;
-  taxId: string; // RIF o CI
+  name: string;
+  doc_number: string; // RIF o CI
   email: string;
-  phone: string;
+  telefono_empresa: string;
   taxType: 'ORDINARY' | 'SPECIAL'; // Assuming these types based on schema.prisma
-  isActive: boolean;
+  is_active: boolean;
   createdAt: string;
   // Add other fields needed for form to match zod schema more closely
-  address?: string;
-  contactPersonName?: string;
-  contactPersonEmail?: string;
-  contactPersonPhone?: string;
-  fiscalAddress?: string;
-  isTaxExempt?: boolean;
+  direccion_fiscal?: string;
+  persona_contacto_info?: any;
+  persona_cobranza_info?: any;
+  documento_constitutivo_info?: any;
+  representante_legal_info?: any;
+  sitio_web?: string;
+  telefono_celular?: string;
+  ciudad?: string;
+  estado?: string;
+  pais?: string;
+  codigo_postal?: string;
+  tipo_venta?: 'MAYOR' | 'DETAL' | 'MAYOR_Y_DETAL';
+  figura_legal?: 'PERSONA_JURIDICA' | 'GOBIERNO_EMPRENDEDOR_CON_FIRMA_PERSONAL' | 'EMPRENDEDOR_SOLO_CON_RIF';
+  tipo_empresa?: 'EMPRESA' | 'FABRICANTE' | 'PRODUCTOR' | 'DISTRIBUIDORA' | 'MAYORISTA' | 'COMERCIO' | 'RESTAURANT' | 'SUPERMERCADO' | 'ABASTO' | 'PANADERIA' | 'FARMACIA';
+  email_user_masiva_SMS?: string;
+  email_user_masiva_whatsapp?: string;
+  settings?: any;
+  is_agente_retencion?: boolean;
+  porcent_retencion_iva?: any;
+  porcent_retencion_islr?: any;
+  porcent_retencion_municipio?: any;
+  user_id?: string;
+  price_list_id?: string;
+  productId?: string;
 }
-
-// Mock Data (keeping this as is)
-const mockCustomers: Customer[] = [
-  {
-    id: "cus_001",
-    businessName: "Tech Solutions Inc.",
-    taxId: "J-12345678-9",
-    email: "contact@techsolutions.com",
-    phone: "+584121234567",
-    taxType: "ORDINARY",
-    isActive: true,
-    createdAt: "2023-01-15",
-    address: "123 Main St",
-    contactPersonName: "John Doe",
-    contactPersonEmail: "john.doe@techsolutions.com",
-    contactPersonPhone: "555-1234",
-    fiscalAddress: "123 Main St",
-    isTaxExempt: false,
-  },
-  {
-    id: "cus_002",
-    businessName: "Global Innovators C.A.",
-    taxId: "V-98765432-1",
-    email: "info@globalinnovators.net",
-    phone: "+584249876543",
-    taxType: "SPECIAL",
-    isActive: true,
-    createdAt: "2023-02-20",
-    address: "456 Oak Ave",
-    contactPersonName: "Jane Smith",
-    contactPersonEmail: "jane.smith@globalinnovators.net",
-    contactPersonPhone: "555-5678",
-    fiscalAddress: "456 Oak Ave",
-    isTaxExempt: false,
-  },
-  {
-    id: "cus_003",
-    businessName: "Agro Farms S.A.",
-    taxId: "J-55555555-0",
-    email: "admin@agrofarms.org",
-    phone: "+584145551212",
-    taxType: "ORDINARY",
-    isActive: false,
-    createdAt: "2023-03-10",
-    address: "789 Pine Ln",
-    contactPersonName: "Peter Jones",
-    contactPersonEmail: "peter.jones@agrofarms.org",
-    contactPersonPhone: "555-8765",
-    fiscalAddress: "789 Pine Ln",
-    isTaxExempt: true,
-  },
-  {
-    id: "cus_004",
-    businessName: "Creative Designs Estudio",
-    taxId: "V-11111111-1",
-    email: "hello@creativedesigns.com",
-    phone: "+584161112233",
-    taxType: "ORDINARY",
-    isActive: true,
-    createdAt: "2023-04-05",
-    address: "101 Art St",
-    contactPersonName: "Anna Lee",
-    contactPersonEmail: "anna.lee@creativedesigns.com",
-    contactPersonPhone: "555-4321",
-    fiscalAddress: "101 Art St",
-    isTaxExempt: false,
-  },
-];
 
 export default function CustomerPageClient() {
   const [searchTerm, setSearchTerm] = useState("");
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [selectedCustomer, setSelectedCustomer] = useState<Customer | undefined>(undefined);
 
-  const filteredCustomers = mockCustomers.filter((customer) =>
-    customer.businessName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    customer.taxId.toLowerCase().includes(searchTerm.toLowerCase()) ||
+  const filteredCustomers = [].filter((customer: Customer) =>
+    customer.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    customer.doc_number.toLowerCase().includes(searchTerm.toLowerCase()) ||
     customer.email.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
@@ -147,4 +98,5 @@ export default function CustomerPageClient() {
     </div>
   );
 }
+
 

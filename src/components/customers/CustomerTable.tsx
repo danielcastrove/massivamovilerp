@@ -43,12 +43,12 @@ export function CustomerTable({ customers, onEdit }: CustomerTableProps) {
       <TableBody>
         {customers.map((customer) => (
           <TableRow key={customer.id}>
-            <TableCell className="font-medium">{customer.businessName}</TableCell>
-            <TableCell>{customer.taxId}</TableCell>
+            <TableCell className="font-medium">{customer.name}</TableCell>
+            <TableCell>{customer.doc_number}</TableCell>
             <TableCell>{customer.email}</TableCell>
-            <TableCell>{customer.phone}</TableCell>
+            <TableCell>{customer.telefono_empresa}</TableCell>
             <TableCell>{customer.taxType === 'ORDINARY' ? 'Ordinario' : 'Especial'}</TableCell>
-            <TableCell>{customer.isActive ? 'Activo' : 'Inactivo'}</TableCell>
+            <TableCell>{customer.is_active ? 'Activo' : 'Inactivo'}</TableCell>
             <TableCell className="text-right">
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>

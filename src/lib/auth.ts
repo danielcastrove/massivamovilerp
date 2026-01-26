@@ -1,7 +1,7 @@
 // massivamovilerp/src/lib/auth.ts
 import NextAuth from 'next-auth';
 import Credentials from 'next-auth/providers/credentials';
-import { compare } from 'bcrypt-ts';
+import { compare } from 'bcryptjs';
 import { prisma } from './db';
 import { authConfig } from '../../auth.config'; // Import the base config
 import { PrismaAdapter } from "@auth/prisma-adapter";
@@ -99,8 +99,17 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
             path: rm.modulo.path || '', // Ensure path is a string
           }));
         } else if (user.role === 'CLIENTE') {
-          // Define specific modules for CLIENTE role
-          modules = [{ id: 'client-portal', name: 'Portal de Cliente', path: '/client-portal' }];
+          // console.log('CLIENTE role detected');
+          const clientModule = await prisma.modulo.findFirst({
+            where: {
+              name: 'Portal de Cliente (Client View)',
+              path: '/clientview'
+            }
+          });
+          if (clientModule) {
+            // console.log('Client module found:', clientModule);
+            modules = [{ id: clientModule.id, name: clientModule.name, path: clientModule.path || '' }];
+          }
         }
         token.modules = modules;
       }

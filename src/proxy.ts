@@ -46,6 +46,22 @@ export async function proxy(request: NextRequest) {
       return NextResponse.redirect(new URL('/access-denied', nextUrl));
     }
 
+    // Route-specific protection for /dashboard/portal-cliente
+    if (nextUrl.pathname.startsWith('/dashboard/portal-cliente')) {
+      // 1. If user is not logged in, redirect to login
+      if (!isLoggedIn) {
+        return NextResponse.redirect(new URL('/auth/login', nextUrl));
+      }
+
+      // 2. If user is CLIENTE, allow access
+      if (userRole === 'CLIENTE') {
+        return NextResponse.next();
+      }
+      
+      // 3. For any other case, deny access
+      return NextResponse.redirect(new URL('/access-denied', nextUrl));
+    }
+
     if (isOnDashboard && !isLoggedIn) {
         return NextResponse.redirect(new URL('/auth/login', nextUrl));
     }
