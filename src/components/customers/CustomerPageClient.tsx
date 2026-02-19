@@ -1,13 +1,21 @@
 
-// massivamovilerp/src/components/customers/CustomerPageClient.tsx
-
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { CustomerTable } from "./CustomerTable";
 import { CustomerFormModal } from "./CustomerFormModal"; // Import the modal
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog"; // Import AlertDialog components
 
 // Define the Customer interface (already defined, keeping it for context)
 export interface Customer {
@@ -47,18 +55,43 @@ export interface Customer {
 }
 
 export default function CustomerPageClient() {
+  const [customers, setCustomers] = useState<Customer[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState("");
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [selectedCustomer, setSelectedCustomer] = useState<Customer | undefined>(undefined);
+  const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
+  const [customerToDeleteId, setCustomerToDeleteId] = useState<string | null>(null);
 
-  const filteredCustomers = [].filter((customer: Customer) =>
-    customer.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    customer.doc_number.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    customer.email.toLowerCase().includes(searchTerm.toLowerCase())
+  const fetchCustomers = async () => {
+    setLoading(true);
+    try {
+      const response = await fetch('/api/customers');
+      if (!response.ok) {
+        throw new Error('Failed to fetch customers');
+      }
+      const data = await response.json();
+      setCustomers(Array.isArray(data) ? data : [data]);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'An unknown error occurred');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchCustomers();
+  }, []);
+
+  const filteredCustomers = customers.filter((customer: Customer) =>
+    (customer.name && customer.name.toLowerCase().includes(searchTerm.toLowerCase())) ||
+    (customer.doc_number && customer.doc_number.toLowerCase().includes(searchTerm.toLowerCase())) ||
+    (customer.email && customer.email.toLowerCase().includes(searchTerm.toLowerCase()))
   );
 
   const handleCreateCustomer = () => {
-    setSelectedCustomer(undefined); // Clear any previously selected customer
+    setSelectedCustomer(undefined);
     setIsModalOpen(true);
   };
 
@@ -69,8 +102,40 @@ export default function CustomerPageClient() {
 
   const handleCloseModal = () => {
     setIsModalOpen(false);
-    setSelectedCustomer(undefined); // Clear selected customer when modal closes
+    setSelectedCustomer(undefined);
   };
+
+  const handleDeleteCustomer = (customerId: string) => {
+    setCustomerToDeleteId(customerId);
+    setIsDeleteModalOpen(true);
+  };
+
+  const executeDelete = async () => {
+    if (!customerToDeleteId) return;
+    try {
+      const response = await fetch(`/api/customers/${customerToDeleteId}`, {
+        method: 'DELETE',
+      });
+      if (!response.ok) {
+        throw new Error('Failed to delete customer');
+      }
+      // Re-fetch customers to update the list after deletion
+      fetchCustomers();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'An unknown error occurred');
+    } finally {
+      setIsDeleteModalOpen(false);
+      setCustomerToDeleteId(null);
+    }
+  };
+
+  if (loading && customers.length === 0) { // Show loading only on initial load
+    return <div>Loading...</div>;
+  }
+
+  if (error) {
+    return <div>Error: {error}</div>;
+  }
 
   return (
     <div className="p-6">
@@ -88,13 +153,33 @@ export default function CustomerPageClient() {
         </Button>
       </div>
 
-      <CustomerTable customers={filteredCustomers} onEdit={handleEditCustomer} />
+      <CustomerTable
+        customers={filteredCustomers}
+        onEdit={handleEditCustomer}
+        onDelete={handleDeleteCustomer}
+      />
 
       <CustomerFormModal
         isOpen={isModalOpen}
         onClose={handleCloseModal}
+        onSuccess={fetchCustomers} // Pass the fetch function as the onSuccess callback
         customer={selectedCustomer}
       />
+
+      <AlertDialog open={isDeleteModalOpen} onOpenChange={setIsDeleteModalOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>¿Estás seguro de que quieres eliminar este cliente?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Esta acción no se puede deshacer. Esto eliminará permanentemente el cliente y todos sus datos asociados.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={() => setIsDeleteModalOpen(false)}>Cancelar</AlertDialogCancel>
+            <AlertDialogAction onClick={executeDelete} className="bg-red-500 hover:bg-red-600">Eliminar</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

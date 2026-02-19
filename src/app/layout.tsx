@@ -73,10 +73,7 @@ function AppContent({ children }: { children: React.ReactNode }) {
   // 3. If authenticated and on a protected route, show the full dashboard layout.
   if (isAuthenticated) {
     return (
-      <div className={cn(
-        "grid min-h-screen w-full",
-        isCollapsed ? "md:grid-cols-[0px_1fr]" : "md:grid-cols-[220px_1fr] lg:grid-cols-[280px_1fr]"
-      )}>
+      <div className="w-full min-h-screen bg-background">
         <Sidebar />
         <div className="flex flex-col">
           <Header />

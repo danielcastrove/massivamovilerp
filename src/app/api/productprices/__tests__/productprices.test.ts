@@ -10,6 +10,9 @@ jest.mock('@/lib/db', () => ({
       upsert: jest.fn(),
       delete: jest.fn(),
     },
+    parametro: { // Added mock for prisma.parametro
+      findUnique: jest.fn(),
+    },
     $transaction: jest.fn(),
   },
 }));
@@ -17,18 +20,21 @@ jest.mock('@/lib/db', () => ({
 describe('Product Prices API', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    (prisma.parametro.findUnique as jest.Mock).mockResolvedValue({
+      value: '36.5', // Mock a default BCV rate
+    });
   });
 
   // --- GET Tests ---
   describe('GET /api/productprices', () => {
     it('should return product prices for a given price_list_id', async () => {
-      const mockPrices = [
-        { product_id: 'prod1', price_usd: 10.0 },
-        { product_id: 'prod2', price_usd: 20.0 },
+      const mockProduct1 = { id: 'prod1', name: 'Product 1', category: { id: 'cat1', name: 'Category 1' } };
+      const mockProduct2 = { id: 'prod2', name: 'Product 2', category: { id: 'cat2', name: 'Category 2' } };
+      const mockPricesResolved = [
+        { product_id: 'prod1', price_usd: new (require('decimal.js'))(10.0), product: mockProduct1 },
+        { product_id: 'prod2', price_usd: new (require('decimal.js'))(20.0), product: mockProduct2 },
       ];
-      (prisma.productPrice.findMany as jest.Mock).mockResolvedValue(
-        mockPrices.map(p => ({ ...p, price_usd: new (require('decimal.js'))(p.price_usd) }))
-      );
+      (prisma.productPrice.findMany as jest.Mock).mockResolvedValue(mockPricesResolved);
 
       const req = new NextRequest('http://localhost/api/productprices?price_list_id=list1');
       const res = await GET(req);
@@ -36,12 +42,18 @@ describe('Product Prices API', () => {
 
       expect(res.status).toBe(200);
       expect(data).toEqual([
-        { product_id: 'prod1', price_usd: 10.0 },
-        { product_id: 'prod2', price_usd: 20.0 },
+        { product_id: 'prod1', price_usd: 10.0, approx_price_bs: 365.0, product: { ...mockProduct1, category: { id: 'cat1', name: 'Category 1' } } },
+        { product_id: 'prod2', price_usd: 20.0, approx_price_bs: 730.0, product: { ...mockProduct2, category: { id: 'cat2', name: 'Category 2' } } },
       ]);
       expect(prisma.productPrice.findMany).toHaveBeenCalledWith({
         where: { price_list_id: 'list1' },
-        select: { product_id: true, price_usd: true },
+        include: {
+          product: {
+            include: {
+              category: true,
+            },
+          },
+        },
       });
     });
 
@@ -65,7 +77,7 @@ describe('Product Prices API', () => {
       ]);
       expect(prisma.productPrice.findMany).toHaveBeenCalledWith({
         where: { product_id: 'prod1' },
-        select: { price_list_id: true, price_usd: true },
+        include: { priceList: true }, // Changed from select to include
       });
     });
 

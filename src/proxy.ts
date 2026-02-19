@@ -22,6 +22,30 @@ export async function proxy(request: NextRequest) {
     const isOnLoginPage = nextUrl.pathname.startsWith('/auth/login');
     const isOnRoot = nextUrl.pathname === '/';
 
+    // Route-specific protection for /dashboard/customer
+    if (nextUrl.pathname.startsWith('/dashboard/customer')) {
+      // 1. If user is not logged in, redirect to login
+      if (!isLoggedIn) {
+        return NextResponse.redirect(new URL('/auth/login', nextUrl));
+      }
+
+      // 2. If user is MASSIVA_ADMIN, allow access
+      if (userRole === 'MASSIVA_ADMIN') {
+        return NextResponse.next();
+      }
+      
+      // 3. If user is MASSIVA_EXTRA, check for module permission
+      if (userRole === 'MASSIVA_EXTRA') {
+        const hasAccess = userModules?.some(module => module.path === '/dashboard/customer');
+        if (hasAccess) {
+          return NextResponse.next();
+        }
+      }
+      
+      // 4. For any other case (e.g., CLIENTE, or EXTRA without permission), deny access
+      return NextResponse.redirect(new URL('/access-denied', nextUrl));
+    }
+
     // Route-specific protection for /dashboard/products
     if (nextUrl.pathname.startsWith('/dashboard/products')) {
       // 1. If user is not logged in, redirect to login

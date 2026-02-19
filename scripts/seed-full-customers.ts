@@ -2,8 +2,14 @@
 import { PrismaClient, Prisma, UserRole } from '@prisma/client';
 import { faker } from '@faker-js/faker';
 import bcrypt from 'bcryptjs';
+import { PrismaPg } from '@prisma/adapter-pg'; // Import the adapter
+import { Pool } from 'pg'; // Import Pool from 'pg'
 
-const prisma = new PrismaClient();
+const connectionString = `${process.env.DATABASE_URL}`; // Get connection string from env
+const pool = new Pool({ connectionString });
+const adapter = new PrismaPg(pool);
+
+const prisma = new PrismaClient({ adapter });
 
 async function main() {
   console.log('Iniciando el script de seeding...');
@@ -26,15 +32,28 @@ async function main() {
   const priceLists = [retailPriceList, wholesalePriceList];
   console.log('Listas de precios encontradas.');
 
-  const existingUser = await prisma.user.findUnique({
-    where: { email: 'josedelgadoyepz@gmail.com' },
-  });
+  // --- Verificando/Creando usuario "josedelgadoyepz@gmail.com" ---
+  console.log('Verificando/Creando usuario "josedelgadoyepz@gmail.com"...');
+  const password = 'password123'; // Default password for seeding
+  const hashedPassword = await bcrypt.hash(password, 10);
 
-  if (!existingUser) {
-    console.error('Error: No se encontró el usuario con email josedelgadoyepz@gmail.com.');
-    return;
-  }
-  console.log('Usuario cliente existente encontrado.');
+  const adminUser = await prisma.user.upsert({
+    where: { email: 'josedelgadoyepz@gmail.com' },
+    update: {
+      password_hash: hashedPassword, // Update password hash in case it changed
+      role: UserRole.MASSIVA_ADMIN, // Ensure it's an admin user
+      is_active: true,
+    },
+    create: {
+      email: 'josedelgadoyepz@gmail.com',
+      password_hash: hashedPassword,
+      role: UserRole.MASSIVA_ADMIN,
+      is_active: true,
+      nombre: 'Jose',
+      apellido: 'Delgado',
+    },
+  });
+  console.log(`Usuario "josedelgadoyepz@gmail.com" verificado/creado con ID: ${adminUser.id}`);
 
   // --- 2. Create Products and ProductPrices (if they don't exist) ---
   console.log('Creando productos y precios de productos...');
@@ -94,7 +113,7 @@ async function main() {
 
     if (i === 0) {
       // Use existing user for the first customer
-      userId = existingUser.id;
+      userId = adminUser.id;
       console.log(`Cliente 1: Usando usuario existente ID: ${userId}`);
     } else {
       // Create new user for the other three

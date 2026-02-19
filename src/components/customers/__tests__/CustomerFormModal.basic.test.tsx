@@ -28,14 +28,14 @@ describe('CustomerFormModal Basic Tests', () => {
     // Go to step 1
     fireEvent.click(screen.getByText('Siguiente'));
     await waitFor(() => {
-        expect(screen.getByText('Paso 1 de 8: Datos de la Empresa')).toBeInTheDocument();
+        expect(screen.getByText('Paso 2 de 9: Datos Empresa')).toBeInTheDocument();
     });
     
     // Fill in some basic data
     fireEvent.change(screen.getByLabelText('Razón Social'), { target: { value: 'Test Company' } });
-    fireEvent.change(screen.getByLabelText('RIF / Cédula'), { target: { value: 'J-123456789' } });
-    fireEvent.change(screen.getByLabelText('Email'), { target: { value: 'test@example.com' } });
-    fireEvent.change(screen.getByLabelText('Teléfono Principal'), { target: { value: '4120000000' } });
+    fireEvent.change(screen.getByLabelText(/RIF \/ Cédula/i).closest('.flex')?.querySelector('input')!, { target: { value: 'J-123456789' } });
+    fireEvent.change(screen.getByLabelText(/Email/i), { target: { value: 'test@example.com' } });
+    fireEvent.change(screen.getByLabelText(/Teléfono Principal/i).closest('.flex')?.querySelector('input')!, { target: { value: '4120000000' } });
 
     // Navigate to the last step
     for (let i = 1; i < 8; i++) {
@@ -43,7 +43,7 @@ describe('CustomerFormModal Basic Tests', () => {
     }
 
     await waitFor(() => {
-        expect(screen.getByText('Paso 8 de 8: Suscripción Inicial')).toBeInTheDocument();
+        expect(screen.getByText('Paso 9 de 9: Suscripción')).toBeInTheDocument();
     });
 
     fireEvent.click(screen.getByText('Guardar Cliente'));
@@ -53,7 +53,7 @@ describe('CustomerFormModal Basic Tests', () => {
         '/api/customers',
         expect.objectContaining({
           method: 'POST',
-          body: expect.stringContaining('"name":"Test Company"'),
+          body: expect.stringContaining('"businessName":"Test Company"'),
         })
       );
     });

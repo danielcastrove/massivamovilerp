@@ -21,12 +21,14 @@ import { Button } from "@/components/ui/button";
 import { MoreHorizontal } from "lucide-react";
 import { Customer } from "./CustomerPageClient"; // Import the Customer interface
 
+
 interface CustomerTableProps {
   customers: Customer[];
-  onEdit: (customer: Customer) => void; // New prop for editing
+  onEdit: (customer: Customer) => void;
+  onDelete: (customerId: string) => void;
 }
 
-export function CustomerTable({ customers, onEdit }: CustomerTableProps) {
+export function CustomerTable({ customers, onEdit, onDelete }: CustomerTableProps) {
   return (
     <Table>
       <TableHeader>
@@ -62,7 +64,7 @@ export function CustomerTable({ customers, onEdit }: CustomerTableProps) {
                   <DropdownMenuItem onClick={() => onEdit(customer)}>
                     Editar
                   </DropdownMenuItem>
-                  <DropdownMenuItem onClick={() => console.log(`Eliminar ${customer.id}`)}>
+                  <DropdownMenuItem onClick={() => onDelete(customer.id)}>
                     Eliminar
                   </DropdownMenuItem>
                   <DropdownMenuSeparator />

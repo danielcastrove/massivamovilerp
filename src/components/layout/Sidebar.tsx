@@ -37,12 +37,17 @@ const staticNavLinksEnds = [
 ];
 
 export function Sidebar() {
-  const { isCollapsed } = useSidebarStore();
+  const { isCollapsed, setCollapsed } = useSidebarStore();
   const pathname = usePathname();
   const { status } = useSession();
   
   const [dynamicLinks, setDynamicLinks] = useState<ModuleLink[]>([]);
   const [loadingModules, setLoadingModules] = useState(true);
+
+  // Close sidebar on pathname change
+  useEffect(() => {
+    setCollapsed(true);
+  }, [pathname, setCollapsed]);
 
   useEffect(() => {
     async function fetchAllowedModules() {
@@ -55,7 +60,6 @@ export function Sidebar() {
           }
           const modules: ModuleLink[] = await response.json();
           
-          // Filter out the modules that are already in the static list
           const staticModuleNames = staticNavLinks.map(l => l.label);
           const filteredModules = modules.filter(m => !staticModuleNames.includes(m.name));
 
@@ -78,72 +82,80 @@ export function Sidebar() {
   const isLoading = status === 'loading' || loadingModules;
 
   return (
-    <div className={cn("sticky top-0 h-screen hidden md:block border-r bg-background text-foreground transition-all duration-300")}>
-      <div className={cn("flex h-full max-h-screen flex-col gap-2", isCollapsed && "overflow-hidden")}>
-
-        <div className="flex-1 overflow-auto py-2">
-          <nav className="grid items-start px-2 text-sm font-medium">
-            {isLoading ? (
-              <div className="flex justify-center items-center p-4">
-                <Spinner />
-              </div>
-            ) : (
-              <>
-                {/* Render static links */}
-                {staticNavLinks.map(({ href, label, icon: Icon }) => (
-                  <Link
-                    key={label}
-                    href={href}
-                    className={cn("flex items-center gap-3 rounded-lg px-3 py-2 transition-all", pathname === href ? "text-white bg-cyan-500" : "text-black hover:text-white hover:bg-cyan-500")}
-                  >
-                    <Icon className="h-4 w-4 text-cyan-500" />
-                    <span className={cn("truncate", { "hidden": isCollapsed })}>{label}</span>
-                  </Link>
-                ))}
-
-                {/* Separator if there are dynamic links */}
-                {dynamicLinks.length > 0 && <div className="my-2 h-px bg-gray-200 dark:bg-gray-500" />}
-
-                {/* Render dynamic links from the API */}
-                {dynamicLinks.map((link) => {
-                  const Icon = link.icon && iconMap[link.icon] ? iconMap[link.icon] : DefaultIcon;
-                  return (
+    <>
+      {/* Overlay */}
+      {!isCollapsed && (
+        <div
+          className="fixed inset-0 z-40 bg-black/60"
+          onClick={() => setCollapsed(true)}
+        />
+      )}
+      <div
+        className={cn(
+          "fixed top-0 left-0 h-screen w-64 border-r bg-background text-foreground transition-transform duration-300 ease-in-out z-50",
+          isCollapsed ? "-translate-x-full" : "translate-x-0"
+        )}
+      >
+        <div className="flex h-full max-h-screen flex-col gap-2">
+          <div className="flex-1 overflow-auto py-2">
+            <nav className="grid items-start px-2 text-sm font-medium">
+              {isLoading ? (
+                <div className="flex justify-center items-center p-4">
+                  <Spinner />
+                </div>
+              ) : (
+                <>
+                  {staticNavLinks.map(({ href, label, icon: Icon }) => (
                     <Link
-                      key={link.name}
-                      href={link.path}
-                      className={cn("flex items-center gap-3 rounded-lg px-3 py-2 transition-all", pathname === link.path ? "text-white bg-cyan-500" : "text-black hover:text-white hover:bg-cyan-500")}
+                      key={label}
+                      href={href}
+                      className={cn("flex items-center gap-3 rounded-lg px-3 py-2 transition-all", pathname === href ? "text-white bg-cyan-500" : "text-black hover:text-white hover:bg-cyan-500")}
                     >
-                      <Icon className="h-4 w-4 text-cyan-500" />
-                      <span className={cn("truncate", { "hidden": isCollapsed })}>{link.name}</span>
+                      <Icon className="h-4 w-4" />
+                      <span className="truncate">{label}</span>
                     </Link>
-                  );
-                })}
+                  ))}
 
-                {/* Separator if there are dynamic links */}
-                {dynamicLinks.length > 0 && <div className="my-2 h-px bg-gray-200 dark:bg-gray-500" />}
+                  {dynamicLinks.length > 0 && <div className="my-2 h-px bg-gray-200 dark:bg-gray-500" />}
 
-                {/* Render static links */}
-                {staticNavLinksEnds.map(({ href, label, icon: Icon }) => (
-                  <Link
-                    key={label}
-                    href={href}
-                    className={cn("flex items-center gap-3 rounded-lg px-3 py-2 transition-all", pathname === href ? "text-white bg-cyan-500" : "text-black hover:text-white hover:bg-cyan-500")}
-                  >
-                    <Icon className="h-4 w-4 text-cyan-500" />
-                    <span className={cn("truncate", { "hidden": isCollapsed })}>{label}</span>
-                  </Link>
-                ))}
-              </>
-            )}
-          </nav>
-        </div>
-        <div className="mt-auto p-4 border-t">
-          <Button variant="ghost" className="w-full justify-start" onClick={() => signOut()}>
-            <LogOut className="mr-2 h-4 w-4" />
-            <span className={cn("truncate", { "hidden": isCollapsed })}>Logout</span>
-          </Button>
+                  {dynamicLinks.map((link) => {
+                    const Icon = link.icon && iconMap[link.icon] ? iconMap[link.icon] : DefaultIcon;
+                    return (
+                      <Link
+                        key={link.name}
+                        href={link.path}
+                        className={cn("flex items-center gap-3 rounded-lg px-3 py-2 transition-all", pathname === link.path ? "text-white bg-cyan-500" : "text-black hover:text-white hover:bg-cyan-500")}
+                      >
+                        <Icon className="h-4 w-4" />
+                        <span className="truncate">{link.name}</span>
+                      </Link>
+                    );
+                  })}
+
+                  {dynamicLinks.length > 0 && <div className="my-2 h-px bg-gray-200 dark:bg-gray-500" />}
+
+                  {staticNavLinksEnds.map(({ href, label, icon: Icon }) => (
+                    <Link
+                      key={label}
+                      href={href}
+                      className={cn("flex items-center gap-3 rounded-lg px-3 py-2 transition-all", pathname === href ? "text-white bg-cyan-500" : "text-black hover:text-white hover:bg-cyan-500")}
+                    >
+                      <Icon className="h-4 w-4" />
+                      <span className="truncate">{label}</span>
+                    </Link>
+                  ))}
+                </>
+              )}
+            </nav>
+          </div>
+          <div className="mt-auto p-4 border-t">
+            <Button variant="ghost" className="w-full justify-start" onClick={() => signOut()}>
+              <LogOut className="mr-2 h-4 w-4" />
+              <span className="truncate">Logout</span>
+            </Button>
+          </div>
         </div>
       </div>
-    </div>
+    </>
   );
 }
