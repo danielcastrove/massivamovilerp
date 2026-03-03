@@ -43,18 +43,50 @@ import { DocumentType, SaleType, LegalFigure, CompanyType } from "@prisma/client
 
 export function CustomerFormModal({ isOpen, onClose, onSuccess, customer }: CustomerFormModalProps) {
   const [step, setStep] = useState(0); // Start at step 0
+  const [isConflictStep, setIsConflictStep] = useState(false);
   const [priceLists, setPriceLists] = useState<{ id: string, name: string }[]>([]);
   const [products, setProducts] = useState<{ id: string, name: string }[]>([]);
   const [clientUsers, setClientUsers] = useState<{ id: string, email: string }[]>([]);
   const [submissionStatus, setSubmissionStatus] = useState<{ success: boolean; messages: string[] } | null>(null);
+  const [existingUserIdToAssociate, setExistingUserIdToAssociate] = useState<string | null>(null);
+
   const form = useForm<CustomerFormValues>({
     resolver: zodResolver(customerFormSchema as z.ZodType<CustomerFormValues>),
     mode: 'onChange',
     defaultValues: {
       useExistingUser: false,
       userId: undefined,
+      taxIdPrefix: "V" as any,
+      type: "EMPRESA",
+      tipo_venta: "DETAL",
+      figura_legal: "PERSONA_JURIDICA",
+      tipo_empresa: "EMPRESA",
+      taxType: "ORDINARY",
+      representante_legal_info: {
+        cedulaPrefix: "V" as any,
+      } as any,
     },
   });
+
+  const resetAndClose = () => {
+    form.reset();
+    setIsConflictStep(false);
+    setExistingUserIdToAssociate(null);
+    setSubmissionStatus(null);
+    setStep(0);
+    onClose();
+  };
+
+  const handleAssociateExistingUser = async () => {
+    if (!existingUserIdToAssociate) return;
+    
+    // Set form values to use the existing user
+    form.setValue("useExistingUser", true);
+    form.setValue("userId", existingUserIdToAssociate);
+    
+    // Re-submit
+    await form.handleSubmit(onSubmit)();
+  };
 
   const formValues = form.watch();
 
@@ -86,13 +118,15 @@ export function CustomerFormModal({ isOpen, onClose, onSuccess, customer }: Cust
           const res = await fetch(`/api/productprices?price_list_id=${selectedPriceList}`);
           if (!res.ok) throw new Error('Failed to fetch products for the selected price list');
           const productPrices = await res.json();
-          const associatedProducts = productPrices.map((pp: any) => pp.product).filter(Boolean);
+          const associatedProducts: { id: string, name: string }[] = productPrices.map((pp: any) => pp.product).filter(Boolean);
           setProducts(associatedProducts);
 
           if (customer) {
-            const isValidProductId = customer.productId && associatedProducts.some(p => p.id === customer.productId);
-            if (isValidProductId) {
-              form.setValue('productId', customer.productId);
+            const currentProductId = customer.productId;
+            const isValidProductId = currentProductId && associatedProducts.some((p: { id: string }) => p.id === currentProductId);
+            
+            if (isValidProductId && typeof currentProductId === 'string') {
+              form.setValue('productId', currentProductId);
             } else if (associatedProducts.length > 0) {
               form.setValue('productId', associatedProducts[0].id);
               console.log(`Defaulting 'Producto Inicial' to the first available product: ${associatedProducts[0].name}`);
@@ -138,6 +172,7 @@ export function CustomerFormModal({ isOpen, onClose, onSuccess, customer }: Cust
     if (isOpen) {
       console.log("Customer data received in modal:", customer); // Add this console.log
       setStep(0);
+      setIsConflictStep(false);
       setSubmissionStatus(null);
       if (customer) {
         const contactInfo = customer.persona_contacto_info as any;
@@ -286,7 +321,6 @@ export function CustomerFormModal({ isOpen, onClose, onSuccess, customer }: Cust
 
   async function onSubmit(values: CustomerFormValues) {
     console.log("Form submitted with values:", values);
-    console.log("Form submitted with values:", values);
     setSubmissionStatus(null);
     
     const url = customer ? `/api/customers/${customer.id}` : '/api/customers';
@@ -301,14 +335,23 @@ export function CustomerFormModal({ isOpen, onClose, onSuccess, customer }: Cust
 
       const result = await response.json();
       if (!response.ok) {
-        throw new Error(result.message || "Ocurrió un error inesperado.");
+        if (response.status === 409 && (result.action === 'user_already_associated' || result.action === 'prompt_to_associate')) {
+            // Handle specific user association scenarios
+            setSubmissionStatus({ success: false, messages: [result.message] });
+            if (result.action === 'prompt_to_associate') {
+                setIsConflictStep(true);
+                setExistingUserIdToAssociate(result.existingUserId);
+            }
+        } else {
+            throw new Error(result.message || "Ocurrió un error inesperado.");
+        }
+      } else {
+        setSubmissionStatus({ success: true, messages: [`¡Cliente ${customer ? 'actualizado' : 'creado'} con éxito!`] });
+        onSuccess();
+        setTimeout(() => {
+          onClose();
+        }, 1000);
       }
-      
-      setSubmissionStatus({ success: true, messages: [`¡Cliente ${customer ? 'actualizado' : 'creado'} con éxito!`] });
-      onSuccess();
-      setTimeout(() => {
-        onClose();
-      }, 1000);
     } catch (error: any) {
       setSubmissionStatus({ success: false, messages: [error.message] });
     }
@@ -332,14 +375,39 @@ export function CustomerFormModal({ isOpen, onClose, onSuccess, customer }: Cust
       <DialogContent className="sm:max-w-[800px] p-0">
         <DialogHeader className="p-6 pb-0">
           <DialogTitle>{customer ? "Editar Cliente" : "Crear Nuevo Cliente"}</DialogTitle>
-          <DialogDescription>
-            {`Paso ${step + 1} de ${totalSteps + 1}: ${stepTitles[step]}`}
-          </DialogDescription>
+          {!isConflictStep && (
+            <DialogDescription>
+              {`Paso ${step + 1} de ${totalSteps + 1}: ${stepTitles[step]}`}
+            </DialogDescription>
+          )}
         </DialogHeader>
         
         <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
             <div className="p-6 space-y-6 min-h-[400px]">
+              {isConflictStep ? (
+                <div className="flex flex-col items-center justify-center space-y-6 py-10 text-center">
+                  <div className="rounded-full bg-amber-100 p-3">
+                    <svg className="h-10 w-10 text-amber-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                    </svg>
+                  </div>
+                  <div className="space-y-2">
+                    <h3 className="text-xl font-bold text-slate-900">Usuario Existente Detectado</h3>
+                    <p className="text-slate-500 max-w-md">
+                      {submissionStatus?.messages[0]}
+                    </p>
+                  </div>
+                  <div className="bg-slate-50 p-4 rounded-lg border border-slate-200 text-sm text-left w-full max-w-md">
+                    <p><strong>¿Qué desea hacer?</strong></p>
+                    <ul className="list-disc ml-5 mt-2 space-y-1 text-slate-600">
+                      <li><strong>Continuar:</strong> Asociará este nuevo cliente al usuario ya registrado.</li>
+                      <li><strong>Descartar:</strong> Cancelará todo el proceso y limpiará los datos ingresados.</li>
+                    </ul>
+                  </div>
+                </div>
+              ) : (
+                <>
               {step === 0 && (
                 <div className="space-y-4">
                   <FormField
@@ -838,7 +906,7 @@ export function CustomerFormModal({ isOpen, onClose, onSuccess, customer }: Cust
                       </div>
                     </FormItem>
                      <FormField name="representante_legal_info.cargo" control={form.control} render={({ field }) => (
-                        <FormItem><FormLabel>Cargo (Opcional)</FormLabel><FormControl><Input placeholder="Director" {...field} value={field.value ?? ""} /></FormControl><FormMessage /></FormItem>
+                        <FormItem><FormLabel>Cargo</FormLabel><FormControl><Input placeholder="Director" {...field} value={field.value ?? ""} /></FormControl><FormMessage /></FormItem>
                     )} />
                  </div>
               )}
@@ -887,19 +955,21 @@ export function CustomerFormModal({ isOpen, onClose, onSuccess, customer }: Cust
                     )}
                 </div>
               )}
+              </>
+              )}
 
       
               <DialogFooter className="p-6 pt-0">
                <div className="flex justify-between w-full">
                   <div>
-                    {step > 0 && (
+                    {!isConflictStep && step > 0 && (
                       <Button type="button" onClick={handlePreviousStep} className="bg-cyan-500 hover:bg-cyan-600 text-white">
                         Anterior
                       </Button>
                     )}
                   </div>
                   <div>
-                  {customer && ( // Only show step indicators in edit mode
+                  {!isConflictStep && customer && ( // Only show step indicators in edit mode
                     <div className="flex justify-center space-x-2">
                       {stepTitles.map((_, index) => (
                         <div
@@ -913,26 +983,48 @@ export function CustomerFormModal({ isOpen, onClose, onSuccess, customer }: Cust
                     </div>
                   )}
                   </div>
-                  <div>
-                    {step < totalSteps ? (
-                      <Button type="button" onClick={handleNextStep} disabled={false} className="bg-cyan-500 hover:bg-cyan-600 text-white">
-                        Siguiente
-                      </Button>
+                  <div className="flex space-x-2">
+                    {isConflictStep ? (
+                      <>
+                        <Button
+                          type="button"
+                          onClick={resetAndClose}
+                          variant="outline"
+                          className="border-slate-300 text-slate-700 hover:bg-slate-100"
+                        >
+                          Descartar y Limpiar
+                        </Button>
+                        <Button
+                          type="button"
+                          onClick={handleAssociateExistingUser}
+                          className="bg-amber-500 hover:bg-amber-600 text-white"
+                        >
+                          Continuar y Asociar
+                        </Button>
+                      </>
                     ) : (
-                      <Button
-                        type="button"
-                        onClick={form.handleSubmit(onSubmit)}
-                        disabled={form.formState.isSubmitting}
-                        className="bg-cyan-500 hover:bg-cyan-600 text-white"
-                      >
-                        {form.formState.isSubmitting ? "Guardando..." : (customer ? "Actualizar Cliente" : "Guardar Cliente")}
-                      </Button>
+                      <>
+                        {step < totalSteps ? (
+                          <Button type="button" onClick={handleNextStep} disabled={false} className="bg-cyan-500 hover:bg-cyan-600 text-white">
+                            Siguiente
+                          </Button>
+                        ) : (
+                          <Button
+                            type="button"
+                            onClick={form.handleSubmit(onSubmit)}
+                            disabled={form.formState.isSubmitting}
+                            className="bg-cyan-500 hover:bg-cyan-600 text-white"
+                          >
+                            {form.formState.isSubmitting ? "Guardando..." : (customer ? "Actualizar Cliente" : "Guardar Cliente")}
+                          </Button>
+                        )}
+                      </>
                     )}
                   </div>
                 </div>
               </DialogFooter>
             </div>
-            {submissionStatus && (
+            {submissionStatus && !isConflictStep && (
               <div className="p-6 pt-0">
                 <Alert variant={submissionStatus.success ? "default" : "destructive"}>
                   <AlertDescription>

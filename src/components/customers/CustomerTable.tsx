@@ -49,8 +49,8 @@ export function CustomerTable({ customers, onEdit, onDelete }: CustomerTableProp
             <TableCell>{customer.doc_number}</TableCell>
             <TableCell>{customer.email}</TableCell>
             <TableCell>{customer.telefono_empresa}</TableCell>
-            <TableCell>{customer.taxType === 'ORDINARY' ? 'Ordinario' : 'Especial'}</TableCell>
-            <TableCell>{customer.is_active ? 'Activo' : 'Inactivo'}</TableCell>
+            <TableCell>{customer.settings?.taxType === 'ORDINARY' ? 'Ordinario' : 'Especial'}</TableCell>
+            <TableCell>{customer.status === 'ACTIVE' ? 'Activo' : 'Inactivo'}</TableCell>
             <TableCell className="text-right">
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>

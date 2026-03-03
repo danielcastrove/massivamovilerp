@@ -21,13 +21,14 @@ import {
 export interface Customer {
   id: string;
   name: string;
-  doc_number: string; // RIF o CI
+  doc_number: string;
+  tipo_doc_identidad?: string;
   email: string;
   telefono_empresa: string;
-  taxType: 'ORDINARY' | 'SPECIAL'; // Assuming these types based on schema.prisma
-  is_active: boolean;
-  createdAt: string;
-  // Add other fields needed for form to match zod schema more closely
+  status: 'ACTIVE' | 'INACTIVE' | 'RESET' | 'BLOCKED' | 'PAUSED';
+  created_at: string;
+  updated_at: string;
+  type: 'PERSONA' | 'EMPRESA';
   direccion_fiscal?: string;
   persona_contacto_info?: any;
   persona_cobranza_info?: any;

@@ -203,14 +203,14 @@ export const formatPhoneNumberForSupabase = (phoneNumber: string | undefined): s
 };
 
 export const customerFormSchemaTransformed = customerFormSchema.transform((data) => {
-  const { useExistingUser, userId, productId, businessName, fiscalAddress, taxIdPrefix, taxIdNumber, ...rest } = data; // Exclude these fields explicitly
+  const { businessName, fiscalAddress, taxIdPrefix, taxIdNumber, ...rest } = data;
 
   const transformedData: any = {
-    ...rest, // 'rest' will now genuinely exclude businessName and fiscalAddress
-    name: businessName, // Map the extracted businessName to 'name'
-    direccion_fiscal: fiscalAddress, // Map the extracted fiscalAddress to 'direccion_fiscal'
-    tipo_doc_identidad: taxIdPrefix, // Map taxIdPrefix to tipo_doc_identidad
-    doc_number: `${taxIdPrefix}-${taxIdNumber}`, // Combine prefix and number for doc_number
+    ...rest,
+    name: businessName,
+    direccion_fiscal: fiscalAddress,
+    tipo_doc_identidad: taxIdPrefix,
+    doc_number: `${taxIdPrefix}-${taxIdNumber}`,
     telefono_empresa: formatPhoneNumberForSupabase(data.phoneNumber),
     telefono_celular: formatPhoneNumberForSupabase(data.telefono_celular),
     persona_contacto_info: {
