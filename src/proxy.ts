@@ -70,6 +70,26 @@ export async function proxy(request: NextRequest) {
       return NextResponse.redirect(new URL('/access-denied', nextUrl));
     }
 
+    // Route-specific protection for /dashboard/facturacion
+    if (nextUrl.pathname.startsWith('/dashboard/facturacion')) {
+      if (!isLoggedIn) {
+        return NextResponse.redirect(new URL('/auth/login', nextUrl));
+      }
+
+      if (userRole === 'MASSIVA_ADMIN') {
+        return NextResponse.next();
+      }
+      
+      if (userRole === 'MASSIVA_EXTRA') {
+        const hasAccess = userModules?.some(module => module.path === '/dashboard/facturacion');
+        if (hasAccess) {
+          return NextResponse.next();
+        }
+      }
+      
+      return NextResponse.redirect(new URL('/access-denied', nextUrl));
+    }
+
     // Route-specific protection for /dashboard/portal-cliente
     if (nextUrl.pathname.startsWith('/dashboard/portal-cliente')) {
       // 1. If user is not logged in, redirect to login

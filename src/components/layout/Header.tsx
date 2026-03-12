@@ -22,7 +22,7 @@ import { type ComponentType } from "react";
 // Static General Links
 const generalLinks = [
   { href: "/dashboard", label: "Dashboard", icon: Home },
-  { href: "/billing", label: "Facturación", icon: DollarSign },
+  { href: "/dashboard/facturacion", label: "Facturación", icon: DollarSign },
   { href: "/customers", label: "Clientes", icon: Users },
   { href: "/settings", label: "Configuración", icon: Settings },
 ];

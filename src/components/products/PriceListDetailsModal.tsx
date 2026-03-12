@@ -98,7 +98,7 @@ export function PriceListDetailsModal({
     const dataToExport = productPrices.map(item => ({
       'Producto': item.product.name,
       'Categoría': item.product.category?.name || 'N/A',
-      'Precio (USD)': item.price_usd.toFixed(2),
+      'Precio (USD)': Number(item.price_usd).toFixed(2),
       'Precio Aprox. (Bs)': formatCurrency(item.approx_price_bs),
     }));
 
@@ -169,7 +169,7 @@ export function PriceListDetailsModal({
                     <TableRow key={item.product_id}>
                       <TableCell className="font-medium">{item.product.name}</TableCell>
                       <TableCell>{item.product.category?.name || 'N/A'}</TableCell>
-                      <TableCell>${item.price_usd.toFixed(2)}</TableCell>
+                      <TableCell>${Number(item.price_usd).toFixed(2)}</TableCell>
                       <TableCell className="text-right">{formatCurrency(item.approx_price_bs)}</TableCell>
                     </TableRow>
                   ))
