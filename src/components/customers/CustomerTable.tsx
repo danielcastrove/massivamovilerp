@@ -26,9 +26,10 @@ interface CustomerTableProps {
   customers: Customer[];
   onEdit: (customer: Customer) => void;
   onDelete: (customerId: string) => void;
+  onViewDetails: (customer: Customer) => void;
 }
 
-export function CustomerTable({ customers, onEdit, onDelete }: CustomerTableProps) {
+export function CustomerTable({ customers, onEdit, onDelete, onViewDetails }: CustomerTableProps) {
   return (
     <Table>
       <TableHeader>
@@ -50,7 +51,15 @@ export function CustomerTable({ customers, onEdit, onDelete }: CustomerTableProp
             <TableCell>{customer.email}</TableCell>
             <TableCell>{customer.telefono_empresa}</TableCell>
             <TableCell>{customer.settings?.taxType === 'ORDINARY' ? 'Ordinario' : 'Especial'}</TableCell>
-            <TableCell>{customer.status === 'ACTIVE' ? 'Activo' : 'Inactivo'}</TableCell>
+            <TableCell>
+              {customer.status === 'ACTIVE' ? (
+                <span className="text-green-600 font-bold bg-green-50 px-2 py-1 rounded text-[10px]">ACTIVO</span>
+              ) : customer.status === 'INACTIVE' ? (
+                <span className="text-slate-500 font-bold bg-slate-100 px-2 py-1 rounded text-[10px]">INACTIVO</span>
+              ) : (
+                <span className="text-red-600 font-bold bg-red-50 px-2 py-1 rounded text-[10px]">BLOQUEADO</span>
+              )}
+            </TableCell>
             <TableCell className="text-right">
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
@@ -68,7 +77,9 @@ export function CustomerTable({ customers, onEdit, onDelete }: CustomerTableProp
                     Eliminar
                   </DropdownMenuItem>
                   <DropdownMenuSeparator />
-                  <DropdownMenuItem>Ver Detalles</DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => onViewDetails(customer)}>
+                    Ver Detalles
+                  </DropdownMenuItem>
                 </DropdownMenuContent>
               </DropdownMenu>
             </TableCell>

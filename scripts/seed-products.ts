@@ -78,6 +78,7 @@ async function main() {
   for (const productData of products) {
     const product = await prisma.product.create({
       data: {
+        sku: `SEED-${productData.name.toUpperCase().replace(/\s+/g, '-')}`,
         name: productData.name,
         type: productData.type,
         billing_cycle: productData.billing_cycle,

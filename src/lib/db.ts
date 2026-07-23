@@ -1,23 +1,30 @@
 // massivamovilerp/src/lib/db.ts
 import { PrismaClient } from '@prisma/client';
-import { PrismaPg } from '@prisma/adapter-pg'; // Corrected import
+import { PrismaPg } from '@prisma/adapter-pg';
 import { Pool } from 'pg';
 
-declare global {
-  // allow global `var` declarations
-  // eslint-disable-next-line no-var
-  var prisma: PrismaClient | undefined;
-}
+const createPrismaClient = () => {
+  const connectionString = process.env.DATABASE_URL;
+  
+  if (!connectionString) {
+    throw new Error('DATABASE_URL is not defined in environment variables');
+  }
 
-const connectionString = `${process.env.DATABASE_URL}`;
-
-const pool = new Pool({ connectionString });
-const adapter = new PrismaPg(pool); // Corrected instantiation
-
-export const prisma =
-  global.prisma ||
-  new PrismaClient({
+  const pool = new Pool({ connectionString });
+  const adapter = new PrismaPg(pool);
+  
+  return new PrismaClient({
     adapter,
   });
+};
 
-if (process.env.NODE_ENV !== 'production') global.prisma = prisma;
+declare global {
+  // eslint-disable-next-line no-var
+  var prisma: ReturnType<typeof createPrismaClient> | undefined;
+}
+
+export const prisma = global.prisma ?? createPrismaClient();
+
+if (process.env.NODE_ENV !== 'production') {
+  global.prisma = prisma;
+}

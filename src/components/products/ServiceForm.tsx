@@ -12,6 +12,7 @@ import { Loader } from "lucide-react";
 import { ProductType, BillingCycle, Category } from "@prisma/client";
 
 const formSchema = z.object({
+  sku: z.string().min(1, "El SKU es obligatorio"),
   name: z.string().min(2, {
     message: "El nombre debe tener al menos 2 caracteres.",
   }),
@@ -20,11 +21,7 @@ const formSchema = z.object({
   categoryId: z.string().min(1, {
     message: "Debe seleccionar una categoría.",
   }),
-}).refine(data => data.type !== 'RECURRENT' || data.billing_cycle !== null, {
-    message: "El ciclo de facturación es obligatorio para productos recurrentes.",
-    path: ["billing_cycle"],
-}); // <-- Missing closing parenthesis and curly brace
-
+});
 
 interface ServiceFormProps {
   onSubmit: (values: z.infer<typeof formSchema>) => void;
@@ -32,10 +29,23 @@ interface ServiceFormProps {
   isSubmitting: boolean;
 }
 
+const generateSku = () => {
+  const timestamp = Date.now().toString(36).toUpperCase();
+  const random = Math.random().toString(36).substring(2, 5).toUpperCase();
+  return `PROD-${timestamp}-${random}`;
+};
+
 export function ServiceForm({ onSubmit, defaultValues, isSubmitting }: ServiceFormProps) {
+  const isEditing = !!defaultValues?.sku;
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
-    defaultValues: defaultValues || { name: "", type: "RECURRENT", billing_cycle: "MONTHLY", categoryId: "" },
+    defaultValues: defaultValues || { 
+      sku: generateSku(),
+      name: "", 
+      type: "RECURRENT", 
+      billing_cycle: "MONTHLY", 
+      categoryId: "" 
+    },
   });
 
   const productType = form.watch("type");
@@ -78,6 +88,34 @@ export function ServiceForm({ onSubmit, defaultValues, isSubmitting }: ServiceFo
   return (
     <Form {...form}>
       <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+        <FormField
+          control={form.control}
+          name="sku"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel>SKU (Identificador Único)</FormLabel>
+              <div className="flex gap-2">
+                <FormControl>
+                  <Input 
+                    {...field} 
+                    placeholder="Ej: SMS-10K-PRO"
+                    className="font-mono font-bold text-cyan-700"
+                  />
+                </FormControl>
+                <Button 
+                  type="button" 
+                  variant="outline" 
+                  onClick={() => form.setValue('sku', generateSku())}
+                  className="shrink-0"
+                  title="Generar SKU automático"
+                >
+                  ✨ Generar
+                </Button>
+              </div>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
         <FormField
           control={form.control}
           name="name"
@@ -155,29 +193,32 @@ export function ServiceForm({ onSubmit, defaultValues, isSubmitting }: ServiceFo
             </FormItem>
           )}
         />
-        {productType === "RECURRENT" && (
-            <FormField
-            control={form.control}
-            name="billing_cycle"
-            render={({ field }) => (
-                <FormItem>
-                <FormLabel>Ciclo de Facturación</FormLabel>
-                <Select onValueChange={field.onChange} value={field.value || ""} >
-                    <FormControl>
-                    <SelectTrigger>
-                        <SelectValue placeholder="Selecciona un ciclo" />
-                    </SelectTrigger>
-                    </FormControl>
-                    <SelectContent>
-                    <SelectItem value="MONTHLY">Mensual</SelectItem>
-                    <SelectItem value="BIMONTHLY">Bimensual</SelectItem>
-                    </SelectContent>
-                </Select>
-                <FormMessage />
-                </FormItem>
-            )}
-            />
-        )}
+        <FormField
+          control={form.control}
+          name="billing_cycle"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel>Ciclo de Facturación</FormLabel>
+              <Select 
+                onValueChange={(v) => field.onChange(v === "none" ? null : v)} 
+                value={field.value || "none"} 
+                disabled={productType === "ONE_TIME" || isSubmitting}
+              >
+                <FormControl>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Selecciona un ciclo" />
+                  </SelectTrigger>
+                </FormControl>
+                <SelectContent>
+                  <SelectItem value="MONTHLY">Mensual</SelectItem>
+                  <SelectItem value="BIMONTHLY">Bimensual</SelectItem>
+                  <SelectItem value="none">No Aplica</SelectItem>
+                </SelectContent>
+              </Select>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
         <Button type="submit" disabled={isSubmitting} className="bg-cyan-500 hover:bg-cyan-600 text-white">
           {isSubmitting && <Loader className="mr-2 h-4 w-4 animate-spin" />}
           {isSubmitting ? "Guardando..." : "Guardar"}

@@ -26,6 +26,7 @@ import { ProductType, BillingCycle } from "@prisma/client";
 
 interface ProductDetail {
     id: string;
+    sku: string;
     name: string;
     type: ProductType;
     billing_cycle: BillingCycle | null;
@@ -87,6 +88,7 @@ export function ProductsExportModal({
 
     const dataToExport = products.map(item => ({
       'ID Producto': item.id,
+      'SKU': item.sku || 'N/A',
       'Nombre': item.name,
       'Tipo': item.type === ProductType.RECURRENT ? 'Recurrente' : 'Única Vez',
       'Ciclo Facturación': item.billing_cycle || 'N/A',
@@ -147,6 +149,7 @@ export function ProductsExportModal({
             <Table>
               <TableHeader>
                 <TableRow>
+                  <TableHead>SKU</TableHead>
                   <TableHead>Nombre</TableHead>
                   <TableHead>Tipo</TableHead>
                   <TableHead>Ciclo</TableHead>
@@ -156,13 +159,14 @@ export function ProductsExportModal({
               <TableBody>
                 {products.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={4} className="text-center text-muted-foreground">
+                    <TableCell colSpan={5} className="text-center text-muted-foreground">
                       No hay productos disponibles.
                     </TableCell>
                   </TableRow>
                 ) : (
                   products.map((item) => (
                     <TableRow key={item.id}>
+                      <TableCell className="font-mono text-xs font-bold text-cyan-600">{item.sku || 'N/A'}</TableCell>
                       <TableCell className="font-medium">{item.name}</TableCell>
                       <TableCell>{typeDisplay[item.type] || 'N/A'}</TableCell>
                       <TableCell>{item.billing_cycle ? cycleDisplay[item.billing_cycle] : 'N/A'}</TableCell>

@@ -29,6 +29,7 @@ interface ProductPriceDetail {
     approx_price_bs: number | null;
     product: {
         id: string;
+        sku: string;
         name: string;
         category: {
             id: string;
@@ -96,6 +97,8 @@ export function PriceListDetailsModal({
     }
 
     const dataToExport = productPrices.map(item => ({
+      'ID Producto': item.product.id,
+      'SKU': item.product.sku || 'N/A',
       'Producto': item.product.name,
       'Categoría': item.product.category?.name || 'N/A',
       'Precio (USD)': Number(item.price_usd).toFixed(2),
@@ -151,6 +154,7 @@ export function PriceListDetailsModal({
             <Table>
               <TableHeader>
                 <TableRow>
+                  <TableHead>SKU</TableHead>
                   <TableHead>Producto</TableHead>
                   <TableHead>Categoría</TableHead>
                   <TableHead>Precio (USD)</TableHead>
@@ -160,13 +164,14 @@ export function PriceListDetailsModal({
               <TableBody>
                 {productPrices.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={4} className="text-center text-muted-foreground">
+                    <TableCell colSpan={5} className="text-center text-muted-foreground">
                       No hay productos asignados a esta lista de precios.
                     </TableCell>
                   </TableRow>
                 ) : (
                   productPrices.map((item) => (
                     <TableRow key={item.product_id}>
+                      <TableCell className="font-mono text-xs font-bold text-cyan-600">{item.product.sku || 'N/A'}</TableCell>
                       <TableCell className="font-medium">{item.product.name}</TableCell>
                       <TableCell>{item.product.category?.name || 'N/A'}</TableCell>
                       <TableCell>${Number(item.price_usd).toFixed(2)}</TableCell>

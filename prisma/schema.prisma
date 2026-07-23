@@ -1,6 +1,5 @@
 generator client {
-  provider        = "prisma-client-js"
-  previewFeatures = ["driverAdapters"]
+  provider = "prisma-client-js"
 }
 
 datasource db {
@@ -114,18 +113,22 @@ model Customer {
   email_user_masiva_SMS               String?
   email_user_masiva_whatsapp          String?
   solo_enviar_cobro_contacto_oobranza Boolean        @default(false)
-  price_list_id                       String?        // Foreign key for the customer's default price list
-  productId                           String?
+  servicios_contratados               Json?          // Array de arrays: [[priceListId, productId, isManual, customName], ...]
+  reseteado_sms                       Boolean        @default(false)
+  fecha_reseteado                     DateTime?
+  cantidad_sms_antes_reset            Int?
+  recurrencia_compra_SMS              RecurrenceType?
+  recurrencia_compra_whatsapp         RecurrenceType?
   created_at                          DateTime       @default(now())
   updated_at                          DateTime       @updatedAt
   user                                User?          @relation(fields: [user_id], references: [id])
-  priceList                           PriceList?     @relation(fields: [price_list_id], references: [id])
-  product                             Product?       @relation(fields: [productId], references: [id])
   invoices                            Invoice[]
+  payments                            Payment[]
 }
 
 model Product {
   id             String         @id @default(uuid())
+  sku            String         @unique
   name           String         @unique
   type           ProductType
   billing_cycle  BillingCycle? // Nullable for ONE_TIME products
@@ -135,7 +138,7 @@ model Product {
   updated_at     DateTime       @updatedAt
   invoice_items  InvoiceItem[]
   product_prices ProductPrice[]
-  customers      Customer[] // One-to-many relation with Customer
+  leads          Lead[]     // Opposite relation for Lead
 }
 
 model PriceList {
@@ -144,8 +147,8 @@ model PriceList {
   created_at     DateTime       @default(now())
   updated_at     DateTime       @updatedAt
   product_prices ProductPrice[]
-  customers      Customer[]
   invoice_items  InvoiceItem[]
+  leads          Lead[]     // Opposite relation for Lead
 }
 
 model ProductPrice {
@@ -171,11 +174,15 @@ model Invoice {
   currency_rate                Decimal       @db.Decimal(10, 4)
   subtotal_usd                 Decimal       @db.Decimal(10, 2)
   tax_amount_usd               Decimal       @db.Decimal(10, 2)
+  igtf_amount_usd              Decimal       @default(0) @db.Decimal(10, 2)
   total_usd                    Decimal       @db.Decimal(10, 2)
   subtotal_bs                  Decimal       @db.Decimal(10, 2)
   tax_amount_bs                Decimal       @db.Decimal(10, 2)
   total_bs                     Decimal       @db.Decimal(10, 2)
   retention_amount_bs          Decimal       @db.Decimal(10, 2)
+  currency_mode                String        @default("USD_BS")
+  invoice_number               Int?
+  control_number               Int?
   proximo_vencimiento_producto DateTime?
   created_at                   DateTime      @default(now())
   updated_at                   DateTime      @updatedAt
@@ -183,19 +190,87 @@ model Invoice {
   invoice_items                InvoiceItem[]
 }
 
+model Payment {
+  id             String        @id @default(uuid())
+  customer_id    String?
+  amount_paid    Decimal       @db.Decimal(10, 2)
+  currency       String        @default("USD") // USD or BS
+  exchange_rate  Decimal       @db.Decimal(10, 4)
+  payment_method String        // Zelle, Transferencia, Pago Movil, etc.
+  reference      String?
+  evidence_url   String?
+  payment_date   DateTime      @default(now())
+  notes          String?       @db.Text
+  created_at     DateTime      @default(now())
+  updated_at     DateTime      @updatedAt
+  customer       Customer?     @relation(fields: [customer_id], references: [id], onDelete: Cascade)
+}
+
 model InvoiceItem {
   id             String   @id @default(uuid())
   invoice_id     String
-  product_id     String
-  price_list_id  String   // Foreign key to trace which price list was used
+  product_id     String?
+  price_list_id  String?  // Foreign key to trace which price list was used
+  is_custom      Boolean  @default(false)
+  custom_name    String?
   quantity       Int
   unit_price_usd Decimal  @db.Decimal(10, 2)
   total_usd      Decimal  @db.Decimal(10, 2)
   created_at     DateTime @default(now())
   updated_at     DateTime @updatedAt
-  invoice        Invoice  @relation(fields: [invoice_id], references: [id])
-  product        Product  @relation(fields: [product_id], references: [id])
-  priceList      PriceList @relation(fields: [price_list_id], references: [id])
+  invoice        Invoice  @relation(fields: [invoice_id], references: [id], onDelete: Cascade)
+  product        Product? @relation(fields: [product_id], references: [id])
+  priceList      PriceList? @relation(fields: [price_list_id], references: [id])
+}
+
+model Lead {
+  id             String      @id @default(uuid())
+  nombre         String
+  apellido       String
+  cedula         String?
+  email          String?
+  telefono       String?
+  
+  // Producto interesado (Catálogo o Manual)
+  productId      String?
+  priceListId    String?
+  custom_product String?     // Si no es un producto de catálogo
+  
+  procedencia    LeadSource
+  fecha_contacto DateTime    @default(now())
+  comentarios    String?     @db.Text
+  fecha_llamada  DateTime?   // Fecha programada o realizada de llamada del vendedor
+  status         LeadStatus  @default(SIN_CONTACTAR)
+  tipo_lead      LeadType    @default(NORMAL)
+  
+  created_at     DateTime    @default(now())
+  updated_at     DateTime    @updatedAt
+
+  product        Product?    @relation(fields: [productId], references: [id])
+  priceList      PriceList?  @relation(fields: [priceListId], references: [id])
+}
+
+enum LeadSource {
+  SITIO_WEB
+  LLAMADA
+  WHATSAPP
+  RECOMENDACION
+  INSTAGRAM
+  OTRO
+}
+
+enum LeadStatus {
+  SIN_CONTACTAR
+  PROPUESTA_ENVIADA
+  LLAMADA_REALIZADA
+  CONTACTO_REALIZADO
+  CLIENTE_CERRADO
+  ESPERANDO_APROBACION
+}
+
+enum LeadType {
+  NORMAL
+  VIP
 }
 
 model Modulo {
@@ -311,29 +386,27 @@ enum CustomerStatus {
 }
 
 enum Rubro {
+  COBRANZA
+  SALUD_Y_FARMACIA
+  INDUSTRIAS
   TELECOMUNICACIONES
-  SEGUROS
-  MASCOTTAS
-  COBRANZAS
-  ALIMENTOS_Y_BEBIDAS
-  FERRETERIA_Y_CONSTRUCCION
-  FARMACIA
-  AUTOPARTES
-  AGRICOLA
+  RETAIL
   TECNOLOGIA
+  CONCESIONARIO
+  FINANZAS
   SERVICIOS
-  SOFTWARE
-  ROPA
-  ZAPATOS
-  HOGAR_Y_MUEBLES
-  PERFUMES
-  RELOJES_JOYAS_Y_BISUTERIA
-  ARTE
-  PAPELERIA_Y_MERCERIA
-  DEPORTES_Y_FITNESS
-  ESTETICA_Y_BELLEZA
-  LICORES
-  ENVITE_Y_AZAR
+  INSTITUCION
+  SEGUROS
+  EDUCACION
+  LOTERIAS_OTP
+  BAR_Y_RESTAURANTE
+  SUPERMERCADO
+  AGENCIA_MARKETING
+  MOVILIDAD
+  IGLESIA
+  CAMPAMENTOS
+  ENTRETENIMIENTO
+  CLUBES
   OTRO
 }
 
@@ -361,6 +434,13 @@ enum CompanyType {
   ABASTO
   PANADERIA
   FARMACIA
+}
+
+enum RecurrenceType {
+  MENSUAL
+  BIMENSUAL
+  TRES_MESES_A_UN_AÑO
+  MAS_DE_UN_AÑO
 }
 
 enum UserStatus {

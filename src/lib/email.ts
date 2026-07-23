@@ -1,5 +1,6 @@
 
 import axios from 'axios';
+import https from 'https';
 
 interface MailOptions {
   to: string;
@@ -41,6 +42,7 @@ export async function sendEmail({ to, subject, html }: MailOptions) {
 
 
   try {
+    // console.log('to', to);
     const payload = {
       token_api: apiAuthToken,
       passwdor_encryted_api: apiPasswordEncrypted,
@@ -65,15 +67,22 @@ export async function sendEmail({ to, subject, html }: MailOptions) {
       body_html: html,
     };
 
+    // console.log(`[EMAIL] Enviando desde: ${emailSendMail} -> Para: ${to}`);
+
+    const agent = new https.Agent({  
+      rejectUnauthorized: false
+    });
+
     const response = await axios.post(emailApiUrl, payload, {
       headers: {
         'Accept': 'application/json',
         "Content-Type": "application/json",
         "authorization": `bearer ${emailApiBearerToken}`
       },
+      httpsAgent: agent
     });
 
-    console.log('Correo enviado exitosamente a través del API externo:', response.data);
+    // console.log('Correo enviado exitosamente a través del API externo:', response.data);
     return `Email sent successfully to ${to}. API Response: ${JSON.stringify(response.data)}`;
   } catch (error) {
     console.error('Error al enviar correo a través del API externo:', error);

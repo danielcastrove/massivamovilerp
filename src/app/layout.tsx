@@ -73,11 +73,11 @@ function AppContent({ children }: { children: React.ReactNode }) {
   // 3. If authenticated and on a protected route, show the full dashboard layout.
   if (isAuthenticated) {
     return (
-      <div className="w-full min-h-screen bg-background">
+      <div className="flex min-h-screen bg-background">
         <Sidebar />
-        <div className="flex flex-col">
+        <div className="flex flex-1 flex-col md:ml-16 transition-all duration-300 ease-in-out">
           <Header />
-          <main className="flex flex-1 flex-col gap-4 p-4 lg:gap-6 lg:p-6 bg-muted/40">
+          <main className="flex flex-1 flex-col gap-4 p-4 lg:gap-6 lg:p-6 bg-muted/40 overflow-x-hidden">
             {children}
           </main>
         </div>

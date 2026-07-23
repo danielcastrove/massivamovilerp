@@ -85,8 +85,14 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Ya existe un producto con este nombre.' }, { status: 409 });
     }
 
+    // Generate a unique SKU: PROD-TIMESTAMP-RANDOM
+    const timestamp = Date.now().toString(36).toUpperCase();
+    const random = Math.random().toString(36).substring(2, 5).toUpperCase();
+    const sku = `PROD-${timestamp}-${random}`;
+
     const newProduct = await prisma.product.create({
       data: {
+        sku: sku,
         name: validatedData.name,
         type: validatedData.type,
         billing_cycle: validatedData.billing_cycle,

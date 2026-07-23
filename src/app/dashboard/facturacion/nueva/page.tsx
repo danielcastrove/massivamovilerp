@@ -16,8 +16,6 @@ export default async function NuevaFacturaPage() {
     prisma.customer.findMany({
       orderBy: { name: "asc" },
       include: {
-        priceList: { select: { name: true } },
-        product: { select: { name: true } },
         user: { select: { nombre: true, apellido: true, email: true, telefono_celular: true } }
       }
     }),
@@ -49,11 +47,8 @@ export default async function NuevaFacturaPage() {
       contacto_email: contactInfo.email || c.user?.email || "Sin email",
       contacto_telefono: contactInfo.telefono || contactInfo.telefono_celular || c.user?.telefono_celular || "Sin teléfono",
       contacto_cargo: contactInfo.cargo || "N/A",
-      contacto_cedula: contactInfo.cedula || "N/A", // Por si existe en el JSON
+      contacto_cedula: contactInfo.cedula || "N/A", 
       
-      productId: c.productId,
-      price_list_name: c.priceList?.name || "No asignada",
-      default_product_name: c.product?.name || "Ninguno",
       porcent_retencion_islr: c.porcent_retencion_islr?.toNumber() || 0,
       porcent_retencion_iva: c.porcent_retencion_iva?.toNumber() || 0,
       porcent_retencion_municipio: c.porcent_retencion_municipio?.toNumber() || 0,

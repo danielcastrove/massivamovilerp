@@ -188,6 +188,7 @@ export function PriceListsTab() {
         <CardContent className="flex flex-col items-center justify-center h-40 text-red-600">
           <AlertCircle className="h-8 w-8 mb-2" />
           <span>Error: {error}</span>
+          <Button variant="outline" className="mt-4" onClick={fetchPriceLists}>Reintentar</Button>
         </CardContent>
       </Card>
     );
@@ -288,11 +289,22 @@ export function PriceListsTab() {
         <CardHeader>
           <div className="flex items-center justify-between">
             <CardTitle>Listas de Precios</CardTitle>
-            <Button className="bg-cyan-500 hover:bg-cyan-600 text-white" onClick={() => setCreateDialogOpen(true)}>Crear Nueva Lista</Button>
+            <Button 
+              className="bg-cyan-500 hover:bg-cyan-600 text-white" 
+              onClick={() => setCreateDialogOpen(true)}
+              disabled={loading}
+            >
+              Crear Nueva Lista
+            </Button>
           </div>
         </CardHeader>
         <CardContent>
-          {priceLists.length === 0 ? (
+          {loading ? (
+            <div className="flex flex-col items-center justify-center py-20">
+              <Loader className="h-10 w-10 animate-spin text-cyan-600 mb-4" />
+              <p className="text-muted-foreground font-medium animate-pulse">Sincronizando listas de precios...</p>
+            </div>
+          ) : priceLists.length === 0 ? (
             <div className="flex items-center justify-center h-40 text-sm text-muted-foreground">
               No hay listas de precios disponibles.
             </div>
@@ -300,10 +312,8 @@ export function PriceListsTab() {
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Nombre de la Lista</TableHead>
-                  <TableHead>
-                    <span className="sr-only">Acciones</span>
-                  </TableHead>
+                  <TableHead className="text-left">Nombre de la Lista</TableHead>
+                  <TableHead className="text-right">Acciones</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>

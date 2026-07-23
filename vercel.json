@@ -7,6 +7,10 @@
     {
       "path": "/api/cron/update-active-rate",
       "schedule": "0 4 * * *"
+    },
+    {
+      "path": "/api/cron/check-expirations",
+      "schedule": "0 12 * * *"
     }
   ]
 }

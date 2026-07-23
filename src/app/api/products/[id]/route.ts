@@ -119,17 +119,36 @@ export async function DELETE(
       return NextResponse.json({ error: 'ID de producto no proporcionado.' }, { status: 400 });
     }
 
-    // Use a transaction to ensure both operations succeed or fail together
-    await prisma.$transaction([
-      // Delete all related product prices first
-      prisma.productPrice.deleteMany({
+    // Usamos una transacción para asegurar integridad referencial
+    await prisma.$transaction(async (tx) => {
+      // 1. Borrar todos los precios asociados a este producto
+      await tx.productPrice.deleteMany({
         where: { product_id: id },
-      }),
-      // Then delete the product itself
-      prisma.product.delete({
+      });
+
+      // 2. Desvincular de Clientes (poner a null)
+      await tx.customer.updateMany({
+        where: { productId: id },
+        data: { productId: null },
+      });
+
+      // 3. Desvincular de Leads (poner a null)
+      await tx.lead.updateMany({
+        where: { productId: id },
+        data: { productId: null },
+      });
+
+      // 4. Desvincular de los items de factura (histórico)
+      await tx.invoiceItem.updateMany({
+        where: { product_id: id },
+        data: { product_id: null },
+      });
+
+      // 5. Finalmente, borrar el producto
+      await tx.product.delete({
         where: { id: id },
-      }),
-    ]);
+      });
+    });
 
     return NextResponse.json({ message: 'Producto eliminado correctamente.' }, { status: 200 });
 

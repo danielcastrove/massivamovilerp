@@ -2,17 +2,106 @@
 import { auth } from "@/lib/auth";
 import { redirect } from "next/navigation";
 import InvoicePageClient from "@/components/facturacion/InvoicePageClient";
+import { prisma } from "@/lib/db";
 
 export default async function FacturacionPage() {
   const session = await auth();
 
-  if (!session) {
+  if (!session || (session.user.role !== "MASSIVA_ADMIN" && session.user.role !== "MASSIVA_EXTRA")) {
     redirect("/auth/login");
   }
 
+  // Fetch invoices and payments in parallel (Vercel Best Practice 3.5)
+  const [invoices, payments] = await Promise.all([
+    prisma.invoice.findMany({
+      include: {
+        customer: {
+          select: {
+            name: true,
+            doc_number: true,
+            direccion_fiscal: true,
+            persona_contacto_info: true,
+            telefono_empresa: true,
+            email: true,
+            is_agente_retencion: true,
+            porcent_retencion_iva: true,
+            porcent_retencion_islr: true,
+            porcent_retencion_municipio: true,
+          }
+        },
+        invoice_items: {
+          include: {
+            product: {
+              select: {
+                sku: true,
+                name: true
+              }
+            }
+          }
+        }
+      },
+      orderBy: { issue_date: "desc" }
+    }),
+    prisma.payment.findMany({
+      include: {
+        customer: { select: { name: true, doc_number: true } }
+      },
+      orderBy: { payment_date: "desc" },
+      take: 100
+    })
+  ]);
+
+  // Serialize only necessary fields to reduce payload size (Vercel Best Practice 3.4)
+  const serializedInvoices = invoices.map(invoice => ({
+    id: invoice.id,
+    invoice_number: invoice.invoice_number,
+    control_number: invoice.control_number,
+    type: invoice.type,
+    status: invoice.status,
+    currency_mode: (invoice as any).currency_mode,
+    issue_date: invoice.issue_date.toISOString(),
+    due_date: invoice.due_date.toISOString(),
+    currency_rate: Number(invoice.currency_rate),
+    subtotal_usd: Number(invoice.subtotal_usd),
+    tax_amount_usd: Number(invoice.tax_amount_usd),
+    igtf_amount_usd: Number(invoice.igtf_amount_usd),
+    total_usd: Number(invoice.total_usd),
+    subtotal_bs: Number(invoice.subtotal_bs),
+    tax_amount_bs: Number(invoice.tax_amount_bs),
+    total_bs: Number(invoice.total_bs),
+    retention_amount_bs: Number(invoice.retention_amount_bs),
+    customer: {
+      ...invoice.customer,
+      porcent_retencion_iva: Number(invoice.customer.porcent_retencion_iva || 0),
+      porcent_retencion_islr: Number(invoice.customer.porcent_retencion_islr || 0),
+      porcent_retencion_municipio: Number(invoice.customer.porcent_retencion_municipio || 0),
+    },
+    invoice_items: invoice.invoice_items.map(item => ({
+      quantity: Number(item.quantity),
+      unit_price_usd: Number(item.unit_price_usd),
+      total_usd: Number(item.total_usd),
+      product: item.product,
+    }))
+  }));
+
+  const serializedPayments = payments.map(p => ({
+    id: p.id,
+    payment_date: p.payment_date.toISOString(),
+    amount_paid: Number(p.amount_paid),
+    currency: p.currency,
+    exchange_rate: Number(p.exchange_rate),
+    payment_method: p.payment_method,
+    reference: p.reference,
+    evidence_url: p.evidence_url,
+    customer: p.customer,
+  }));
+
   return (
     <div className="w-full">
-      <InvoicePageClient />
+      <InvoicePageClient 
+        initialInvoices={serializedInvoices} 
+        initialPayments={serializedPayments} 
+      />
     </div>
   );
 }

@@ -33,4 +33,12 @@ describe('formatPhoneNumberForSupabase', () => {
   it('should handle numbers longer than 10 digits without error', () => {
     expect(formatPhoneNumberForSupabase('01234567890123')).toBe('+581234567890123');
   });
+
+  it('should not duplicate 58 if number already starts with 58', () => {
+    expect(formatPhoneNumberForSupabase('584121234567')).toBe('+584121234567');
+  });
+
+  it('should not duplicate 58 if number has +58 with non-digits', () => {
+    expect(formatPhoneNumberForSupabase('+58 414 123 4567')).toBe('+584141234567');
+  });
 });

@@ -8,7 +8,7 @@ const contactInfoSchema = z.object({
   telefonoPrefix: z.literal("+58").default("+58"), // Auto-filled and disabled in UI
   telefono: z.string().min(1, { message: "El número de teléfono es obligatorio." }),
   telefono_celularPrefix: z.literal("+58").default("+58"),
-  telefono_celular: z.string().optional(), // Opcional
+  telefono_celular: z.string().optional().nullable(),
   cargo: z.string().min(1, { message: "El cargo es obligatorio." }),
 });
 
@@ -16,7 +16,7 @@ const documentoConstitutivoSchema = z.object({
   nombre_registro: z.string().min(1, { message: "El nombre del registro es obligatorio." }),
   fecha_registro: z.string().min(1, { message: "La fecha de registro es obligatoria." }), // Assuming YYYY-MM-DD format from UI
   nro_tomo: z.string().min(1, { message: "El número y tomo es obligatorio." }),
-  email_registro: z.string().email({ message: "Formato de email inválido." }).or(z.literal("")).optional(), // Opcional
+  email_registro: z.string().email({ message: "Formato de email inválido." }).or(z.literal("")).optional().nullable(),
 });
 
 const representanteLegalSchema = z.object({
@@ -34,6 +34,7 @@ const representanteLegalSchema = z.object({
 
 export const customerFormSchema = z.object({
   // Step 0: Usuario
+  status: z.enum(["ACTIVE", "INACTIVE", "BLOCKED"]).default("ACTIVE"),
   useExistingUser: z.boolean().default(false),
   userId: z.string().uuid({ message: "Formato de ID de usuario inválido." }).nullable().optional(),
 
@@ -47,8 +48,8 @@ export const customerFormSchema = z.object({
   phonePrefix: z.literal("+58").default("+58"),
   phoneNumber: z.string().min(1, { message: "El número de teléfono principal es obligatorio." }),
   telefono_celularPrefix: z.literal("+58").default("+58"),
-  telefono_celular: z.string().optional(), // Opcional
-  sitio_web: z.string().url({ message: "Formato de sitio web inválido." }).or(z.literal("")).optional(), // Opcional
+  telefono_celular: z.string().optional().nullable(),
+  sitio_web: z.string().url({ message: "Formato de sitio web inválido." }).or(z.literal("")).optional().nullable(),
   address: z.string().min(1, { message: "La dirección física es obligatoria." }),
 
   // Step 2: Detalles Empresa
@@ -65,9 +66,19 @@ export const customerFormSchema = z.object({
   tipo_empresa: z.nativeEnum(CompanyType, {
     errorMap: () => ({ message: "El tipo de empresa es obligatorio." }),
   }),
-  email_user_masiva_SMS: z.string().email({ message: "Formato de email inválido." }).or(z.literal("")).optional(), // Opcional
-  email_user_masiva_whatsapp: z.string().email({ message: "Formato de email inválido." }).or(z.literal("")).optional(), // Opcional
-  type: z.enum(["PERSONA", "EMPRESA"], { errorMap: () => ({ message: "El tipo de cliente es obligatorio." }) }), // NEW FIELD
+  email_user_masiva_SMS: z.string().email({ message: "Formato de email inválido." }).or(z.literal("")).optional().nullable(),
+  email_user_masiva_whatsapp: z.string().email({ message: "Formato de email inválido." }).or(z.literal("")).optional().nullable(),
+  type: z.enum(["PERSONA", "EMPRESA"], { errorMap: () => ({ message: "El tipo de cliente es obligatorio." }) }),
+  rubro: z.string().optional().nullable(),
+  
+  // Nuevos campos de reseteo SMS
+  reseteado_sms: z.boolean().default(false),
+  fecha_reseteado: z.string().optional().nullable(), 
+  cantidad_sms_antes_reset: z.number().optional().nullable(),
+  
+  // Nuevos campos de recurrencia
+  recurrencia_compra_SMS: z.enum(["MENSUAL", "BIMENSUAL", "TRES_MESES_A_UN_AÑO", "MAS_DE_UN_AÑO"]).optional().nullable(),
+  recurrencia_compra_whatsapp: z.enum(["MENSUAL", "BIMENSUAL", "TRES_MESES_A_UN_AÑO", "MAS_DE_UN_AÑO"]).optional().nullable(),
 
   // Step 3: Contacto
   persona_contacto_info: contactInfoSchema,
@@ -83,20 +94,26 @@ export const customerFormSchema = z.object({
   // Step 6: Impuestos
   taxType: z.enum(["ORDINARY", "SPECIAL"], {
     errorMap: () => ({ message: "El tipo de contribuyente es obligatorio." }),
-  }),
+  }).optional(),
   isTaxExempt: z.boolean().default(false),
-  is_agente_retencion: z.boolean().default(false), // Conditionally required via superRefine
-  porcent_retencion_iva: z.number().min(0, { message: "El porcentaje no puede ser negativo." }).max(100, { message: "El porcentaje no puede exceder 100." }).optional(), // Conditionally mandatory
-  porcent_retencion_islr: z.number().min(0, { message: "El porcentaje no puede ser negativo." }).max(100, { message: "El porcentaje no puede exceder 100." }).optional(), // Conditionally mandatory
-  porcent_retencion_municipio: z.number().min(0, { message: "El porcentaje no puede ser negativo." }).max(100, { message: "El porcentaje no puede exceder 100." }).optional(), // Conditionally mandatory
-  fiscalAddress: z.string().min(1, { message: "La dirección fiscal es obligatoria." }),
+  is_agente_retencion: z.boolean().default(false),
+  porcent_retencion_iva: z.preprocess((val) => (val === "" ? null : val), z.number().min(0).max(100).nullable().optional()),
+  porcent_retencion_islr: z.preprocess((val) => (val === "" ? null : val), z.number().min(0).max(100).nullable().optional()),
+  porcent_retencion_municipio: z.preprocess((val) => (val === "" ? null : val), z.number().min(0).max(100).nullable().optional()),
+  fiscalAddress: z.string().optional().nullable(),
 
   // Step 7: Rep. Legal
   representante_legal_info: representanteLegalSchema,
 
   // Step 8: Suscripción
-  priceListId: z.string().uuid({ message: "Debe seleccionar una lista de precios." }),
-  productId: z.string().uuid({ message: "Debe seleccionar un producto." }),
+  services: z.array(z.object({
+    priceListId: z.string().uuid().nullable().optional(),
+    productId: z.string().uuid().nullable().optional(),
+    custom_product: z.string().nullable().optional(),
+    isManualMode: z.boolean().default(false),
+    price_usd: z.number().optional(),
+    price_bs: z.number().optional(),
+  })).default([]),
 }).superRefine((data, ctx) => {
   // Conditional validation for userId when useExistingUser is true
   if (data.useExistingUser && !data.userId) {
@@ -113,34 +130,34 @@ export const customerFormSchema = z.object({
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
         message: "El nombre de cobranza es obligatorio.",
-        path: ['persona_cobranza_info.nombre'],
+        path: ['persona_cobranza_info', 'nombre'],
       });
     }
     if (!data.persona_cobranza_info?.email) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
         message: "El email de cobranza es obligatorio.",
-        path: ['persona_cobranza_info.email'],
+        path: ['persona_cobranza_info', 'email'],
       });
     } else if (data.persona_cobranza_info?.email && !z.string().email().safeParse(data.persona_cobranza_info.email).success) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
         message: "Formato de email de cobranza inválido.",
-        path: ['persona_cobranza_info.email'],
+        path: ['persona_cobranza_info', 'email'],
       });
     }
     if (!data.persona_cobranza_info?.telefono) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
         message: "El teléfono de cobranza es obligatorio.",
-        path: ['persona_cobranza_info.telefono'],
+        path: ['persona_cobranza_info', 'telefono'],
       });
     }
     if (!data.persona_cobranza_info?.cargo) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
         message: "El cargo de cobranza es obligatorio.",
-        path: ['persona_cobranza_info.cargo'],
+        path: ['persona_cobranza_info', 'cargo'],
       });
     }
   }
@@ -199,18 +216,32 @@ export const formatPhoneNumberForSupabase = (phoneNumber: string | undefined): s
   if (cleanedNumber.startsWith('0')) {
     cleanedNumber = cleanedNumber.substring(1);
   }
-  return `+58${cleanedNumber}`;
+  if (!cleanedNumber.startsWith('58')) {
+    return `+58${cleanedNumber}`;
+  }
+  return `+${cleanedNumber}`;
 };
 
 export const customerFormSchemaTransformed = customerFormSchema.transform((data) => {
-  const { businessName, fiscalAddress, taxIdPrefix, taxIdNumber, ...rest } = data;
+  const { businessName, fiscalAddress, taxIdPrefix, taxIdNumber, services, ...rest } = data;
 
   const transformedData: any = {
     ...rest,
     name: businessName,
-    direccion_fiscal: fiscalAddress,
+    direccion_fiscal: fiscalAddress || data.address,
     tipo_doc_identidad: taxIdPrefix,
     doc_number: `${taxIdPrefix}-${taxIdNumber}`,
+    fecha_reseteado: data.fecha_reseteado ? new Date(data.fecha_reseteado) : null,
+    // Formato: [priceListId, productId|custom_product, isManualMode, custom_product, price_usd, price_bs]
+    // `price_usd/price_bs` son clave para servicios manuales/sin lista (actualización de precios).
+    servicios_contratados: services.map(s => [
+      s.priceListId,
+      s.isManualMode ? s.custom_product : s.productId,
+      s.isManualMode,
+      s.custom_product,
+      s.price_usd ?? null,
+      (s as any).price_bs ?? null
+    ]),
     telefono_empresa: formatPhoneNumberForSupabase(data.phoneNumber),
     telefono_celular: formatPhoneNumberForSupabase(data.telefono_celular),
     persona_contacto_info: {

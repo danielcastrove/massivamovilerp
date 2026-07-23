@@ -61,6 +61,7 @@ async function main() {
   if (!product1) {
     product1 = await prisma.product.create({
       data: {
+        sku: 'PROD-SMS-BASIC',
         name: 'Plan SMS Básico',
         type: 'RECURRENT',
         billing_cycle: 'BIMONTHLY',
@@ -73,6 +74,7 @@ async function main() {
   if (!product2) {
     product2 = await prisma.product.create({
       data: {
+        sku: 'PROD-WA-PREMIUM',
         name: 'Plan WhatsApp Premium',
         type: 'RECURRENT',
         billing_cycle: 'MONTHLY',
@@ -80,7 +82,6 @@ async function main() {
     });
      console.log(`Producto "Plan WhatsApp Premium" creado.`);
   }
-  
   // Link products to price lists
   for (const list of priceLists) {
       await prisma.productPrice.upsert({

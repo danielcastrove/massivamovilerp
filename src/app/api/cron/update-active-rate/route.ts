@@ -64,7 +64,7 @@ export async function GET() {
     });
 
     // 4. Éxito total
-    await sendSuccessEmail(adminEmail, rateValueStr, activeRate.fecha_inicio, fechaValor);
+    await sendSuccessEmail(adminEmail, rateValueStr, activeRate.fecha_inicio, activeRate.fecha_fin, fechaValor);
     return NextResponse.json({ success: true, tasa: rateValueStr });
 
   } catch (error) {
@@ -84,7 +84,7 @@ export async function GET() {
 
     if (fallbackRate) {
       const rateStr = Number(fallbackRate.tasa).toLocaleString('es-VE', { minimumFractionDigits: 4, maximumFractionDigits: 4 });
-      await sendSuccessEmail(adminEmail, rateStr, fallbackRate.fecha_inicio, fallbackRate.fecha_efectiva, true);
+      await sendSuccessEmail(adminEmail, rateStr, fallbackRate.fecha_inicio, fallbackRate.fecha_fin, fallbackRate.fecha_efectiva, true);
       return NextResponse.json({ success: true, message: 'Usando tasa vigente en sistema (scraping falló)', tasa: rateStr });
     }
 
@@ -97,15 +97,21 @@ export async function GET() {
   }
 }
 
-async function sendSuccessEmail(to: string, rate: string, inicio: Date, valor: Date, isFallback = false) {
+async function sendSuccessEmail(to: string, rate: string, inicio: Date, fin: Date | null, valor: Date, isFallback = false) {
+  // Para el correo, si es fin de semana o no hay actualización, mostramos la fecha del portal (valor) como fin
+  // pero en la DB sigue siendo farFuture para mantener la vigencia.
+  const displayFin = valor.toISOString().split('T')[0];
+  const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || 'https://massivamovilerp.vercel.app';
+
   const html = `
     <div style="text-align: center; font-family: Arial, sans-serif; color: #333;">
-      <img src="${process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000'}/massivamovil.png" alt="Logo" style="max-width: 150px; margin-bottom: 20px;">
+      <img src="${baseUrl}/massivamovil.png" alt="MassivaMovil Logo" style="max-width: 150px; margin-bottom: 20px;">
       <h1 style="color: #6D28D9;">${isFallback ? 'Tasa BCV Vigente' : 'Tasa BCV Actualizada'}</h1>
       <p>${isFallback ? 'Se mantiene la tasa actual del sistema (el portal del BCV no respondió).' : 'Sincronización exitosa con el portal del BCV.'}</p>
       <div style="background: #f3f4f6; padding: 20px; border-radius: 8px; display: inline-block; text-align: left;">
         <p><strong>Tasa:</strong> ${rate} Bs.</p>
         <p><strong>Válida desde:</strong> ${inicio.toISOString().split('T')[0]}</p>
+        <p><strong>Válida hasta:</strong> ${displayFin}</p>
         <p><strong>Fecha Valor (BCV):</strong> ${valor.toISOString().split('T')[0]}</p>
       </div>
     </div>
@@ -114,8 +120,10 @@ async function sendSuccessEmail(to: string, rate: string, inicio: Date, valor: D
 }
 
 async function sendErrorEmail(to: string, error: string) {
+  const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || 'https://massivamovilerp.vercel.app';
   const html = `
     <div style="text-align: center; font-family: Arial, sans-serif; color: #333;">
+      <img src="${baseUrl}/massivamovil.png" alt="MassivaMovil Logo" style="max-width: 150px; margin-bottom: 20px;">
       <h1 style="color: #D92828;">Error Crítico: Sin Tasa BCV</h1>
       <p>No se pudo obtener la tasa de la web ni se encontró una tasa vigente en la base de datos.</p>
       <p style="background: #fee; padding: 10px; border-left: 5px solid #D92828;">${error}</p>

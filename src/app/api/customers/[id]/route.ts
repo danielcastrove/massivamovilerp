@@ -13,7 +13,10 @@ const formatPhoneNumberForSupabase = (phoneNumber: string | undefined): string |
   if (cleanedNumber.startsWith('0')) {
     cleanedNumber = cleanedNumber.substring(1);
   }
-  return `+58${cleanedNumber}`;
+  if (!cleanedNumber.startsWith('58')) {
+    return `+58${cleanedNumber}`;
+  }
+  return `+${cleanedNumber}`;
 };
 
 
@@ -44,10 +47,9 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
         fiscalAddress,
         useExistingUser,
         userId,
-        productId,
+        services,
         sameAsContact,
         email,
-        priceListId,
         type,
         sitio_web,
         telefono_celular,
@@ -68,7 +70,9 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
         porcent_retencion_iva,
         porcent_retencion_islr,
         porcent_retencion_municipio,
-        representante_legal_info
+        representante_legal_info,
+        taxType,
+        isTaxExempt
     } = validation.data;
 
     let finalUserId: string | null = null;
@@ -82,32 +86,48 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
     }
 
     // Step 3: Carefully construct the data object for Prisma, only including valid model fields
+    // Ensure empty strings are treated as null for optional fields and enums
     const dataForCustomerUpdate: Prisma.CustomerUpdateInput = {
       name: businessName,
-      email: email,
+      status: (validation.data as any).status || 'ACTIVE',
+      email: email || null,
       tipo_doc_identidad: taxIdPrefix,
-      doc_number: `${taxIdNumber}`, // This is the core fix for the bug
-      direccion_fiscal: fiscalAddress,
-      telefono_empresa: formatPhoneNumberForSupabase(phoneNumber),
-      telefono_celular: formatPhoneNumberForSupabase(telefono_celular),
-      sitio_web: sitio_web,
-      ciudad: ciudad,
-      estado: estado,
-      pais: pais,
-      codigo_postal: codigo_postal,
-      tipo_venta: tipo_venta,
-      figura_legal: figura_legal,
-      tipo_empresa: tipo_empresa,
-      email_user_masiva_SMS: email_user_masiva_SMS,
-      email_user_masiva_whatsapp: email_user_masiva_whatsapp,
+      doc_number: `${taxIdPrefix}-${taxIdNumber}`,
+      direccion_fiscal: fiscalAddress || address || null,
+      telefono_empresa: formatPhoneNumberForSupabase(phoneNumber) || null,
+      telefono_celular: formatPhoneNumberForSupabase(telefono_celular) || null,
+      sitio_web: sitio_web || null,
+      ciudad: ciudad || null,
+      estado: estado || null,
+      pais: pais || null,
+      codigo_postal: codigo_postal || null,
+      tipo_venta: tipo_venta || null,
+      figura_legal: figura_legal || null,
+      tipo_empresa: tipo_empresa || null,
+      rubro: (validation.data as any).rubro && (validation.data as any).rubro !== "" ? (validation.data as any).rubro : null,
+      email_user_masiva_SMS: email_user_masiva_SMS || null,
+      email_user_masiva_whatsapp: email_user_masiva_whatsapp || null,
       type: type,
+      settings: {
+        taxType: taxType || "ORDINARY",
+        isTaxExempt: !!isTaxExempt
+      },
+      // Formato: [priceListId, productId|custom_product, isManualMode, custom_product, price_usd, price_bs]
+      servicios_contratados: services.map(s => [
+        s.priceListId,
+        s.isManualMode ? s.custom_product : s.productId,
+        s.isManualMode,
+        s.custom_product,
+        (s as any).price_usd ?? null,
+        (s as any).price_bs ?? null
+      ]),
       persona_contacto_info: {
           ...persona_contacto_info,
           telefono: formatPhoneNumberForSupabase(persona_contacto_info.telefono),
           telefono_celular: formatPhoneNumberForSupabase(persona_contacto_info.telefono_celular),
-      },
+      } as any,
       // Handle conditional 'persona_cobranza_info'
-      persona_cobranza_info: sameAsContact
+      persona_cobranza_info: (sameAsContact
         ? {
             ...persona_contacto_info,
             telefono: formatPhoneNumberForSupabase(persona_contacto_info.telefono),
@@ -117,18 +137,17 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
             ...persona_cobranza_info,
             telefono: formatPhoneNumberForSupabase(persona_cobranza_info.telefono),
             telefono_celular: formatPhoneNumberForSupabase(persona_cobranza_info.telefono_celular),
-          },
-      documento_constitutivo_info: documento_constitutivo_info,
-      is_agente_retencion: is_agente_retencion,
-      porcent_retencion_iva: porcent_retencion_iva,
-      porcent_retencion_islr: porcent_retencion_islr,
-      porcent_retencion_municipio: porcent_retencion_municipio,
+          }) as any,
+      documento_constitutivo_info: documento_constitutivo_info as any,
+      is_agente_retencion: !!is_agente_retencion,
+      porcent_retencion_iva: porcent_retencion_iva !== undefined && porcent_retencion_iva !== null ? new Prisma.Decimal(porcent_retencion_iva) : null,
+      porcent_retencion_islr: porcent_retencion_islr !== undefined && porcent_retencion_islr !== null ? new Prisma.Decimal(porcent_retencion_islr) : null,
+      porcent_retencion_municipio: porcent_retencion_municipio !== undefined && porcent_retencion_municipio !== null ? new Prisma.Decimal(porcent_retencion_municipio) : null,
       representante_legal_info: {
           ...representante_legal_info,
           telefono_celular: formatPhoneNumberForSupabase(representante_legal_info.telefonoNumber),
-      },
+      } as any,
       user: finalUserId ? { connect: { id: finalUserId } } : { disconnect: true },
-      priceList: { connect: { id: priceListId } },
     };
 
     // The transaction logic can remain as is, since we are now passing a valid object
@@ -138,16 +157,6 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
         data: dataForCustomerUpdate,
       });
 
-      if (productId) {
-        // This logic for updating invoice based on product can be refined later if needed
-        const latestInvoice = await tx.invoice.findFirst({
-          where: { customer_id: id },
-          orderBy: { issue_date: 'desc' },
-        });
-        if (latestInvoice) {
-          // ... logic to update invoice if necessary
-        }
-      }
       return [customerUpdate];
     });
 
@@ -170,12 +179,50 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
       if (!session || !session.user || session.user.role !== 'MASSIVA_ADMIN') {
         return NextResponse.json({ message: 'Forbidden' }, { status: 403 });
       }
-  
-      await prisma.customer.delete({
-        where: { id: id },
+
+      // Proceso de eliminación segura con dependencias
+      await prisma.$transaction(async (tx) => {
+        // 1. Obtener datos del cliente para saber si tiene un usuario asociado
+        const customer = await tx.customer.findUnique({
+          where: { id },
+          select: { user_id: true }
+        });
+
+        if (!customer) throw new Error("Cliente no encontrado");
+
+        // 2. Borrar items de facturas asociados a facturas de este cliente
+        // (Aunque InvoiceItem tiene Cascade con Invoice, lo hacemos explícito por seguridad si hay otras relaciones)
+        await tx.invoiceItem.deleteMany({
+          where: { invoice: { customer_id: id } }
+        });
+
+        // 3. Borrar facturas del cliente
+        await tx.invoice.deleteMany({
+          where: { customer_id: id }
+        });
+
+        // 4. Borrar el cliente
+        await tx.customer.delete({
+          where: { id }
+        });
+
+        // 5. Si tiene un usuario asociado y es rol CLIENTE, lo borramos también
+        // para no dejar usuarios huérfanos sin cliente.
+        if (customer.user_id) {
+          const user = await tx.user.findUnique({
+            where: { id: customer.user_id },
+            select: { role: true }
+          });
+
+          if (user && user.role === 'CLIENTE') {
+            await tx.user.delete({
+              where: { id: customer.user_id }
+            });
+          }
+        }
       });
   
-      return NextResponse.json({ message: 'Customer deleted successfully' }, { status: 200 });
+      return NextResponse.json({ message: 'Cliente y datos asociados eliminados correctamente' }, { status: 200 });
   
     } catch (error) {
       console.error("Error deleting customer:", error);

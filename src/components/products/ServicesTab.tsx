@@ -16,6 +16,7 @@ import { ProductsExportModal } from "./ProductsExportModal"; // Import the new m
 
 interface Product {
   id: string;
+  sku: string;
   name: string;
   type: ProductType;
   billing_cycle: BillingCycle | null;
@@ -244,29 +245,48 @@ export function ServicesTab() {
           <div className="flex items-center justify-between">
             <CardTitle>Servicios</CardTitle>
             <div className="flex items-center space-x-4">
-              <Button className="bg-cyan-500 hover:bg-cyan-600 text-white" onClick={() => setIsExportModalOpen(true)}>Exportar Productos</Button>
-              <Button className="bg-cyan-500 hover:bg-cyan-600 text-white" onClick={() => setCreateDialogOpen(true)}>Crear Nuevo Servicio</Button>
+              <Button 
+                className="bg-cyan-500 hover:bg-cyan-600 text-white" 
+                onClick={() => setIsExportModalOpen(true)}
+                disabled={loading}
+              >
+                Exportar Productos
+              </Button>
+              <Button 
+                className="bg-cyan-500 hover:bg-cyan-600 text-white" 
+                onClick={() => setCreateDialogOpen(true)}
+                disabled={loading}
+              >
+                Crear Nuevo Servicio
+              </Button>
             </div>
           </div>
         </CardHeader>
         <CardContent>
-          {products.length === 0 ? (
+          {loading ? (
+            <div className="flex flex-col items-center justify-center py-20">
+              <Loader className="h-10 w-10 animate-spin text-cyan-600 mb-4" />
+              <p className="text-muted-foreground font-medium animate-pulse">Sincronizando servicios...</p>
+            </div>
+          ) : products.length === 0 ? (
             <div className="text-center py-10 text-muted-foreground">No hay servicios disponibles.</div>
           ) : (
             <Table>
               <TableHeader>
                 <TableRow>
+                  <TableHead>SKU</TableHead>
                   <TableHead>Nombre del Servicio</TableHead>
                   <TableHead>Categoría</TableHead>
                   <TableHead>Tipo</TableHead>
                   <TableHead>Ciclo de Facturación</TableHead>
-                  <TableHead><span className="sr-only">Acciones</span></TableHead>
+                  <TableHead>Acciones</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {products.map((service) => {
                   return (
                     <TableRow key={service.id}>
+                      <TableCell className="font-mono text-xs font-bold text-cyan-600">{service.sku || "N/A"}</TableCell>
                       <TableCell className="font-medium">{service.name}</TableCell>
                       <TableCell>{service.category ? service.category.name : "N/A"}</TableCell>
                       <TableCell>{typeDisplay[service.type] || "N/A"}</TableCell>
