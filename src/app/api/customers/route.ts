@@ -196,7 +196,7 @@ export async function GET(request: Request) {
 
       if (userRole === 'CLIENTE') {
         customers = await prisma.customer.findUnique({
-          where: { user_id: session.user.id },
+          where: { user_id: session!.user.id },
           include: { user: true }
         });
       } else {
