@@ -11,19 +11,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import Plus from "lucide-react/dist/esm/icons/plus";
-import Search from "lucide-react/dist/esm/icons/search";
-import FileText from "lucide-react/dist/esm/icons/file-text";
-import Download from "lucide-react/dist/esm/icons/download";
-import Loader2 from "lucide-react/dist/esm/icons/loader-2";
-import MoreVertical from "lucide-react/dist/esm/icons/more-vertical";
-import Pencil from "lucide-react/dist/esm/icons/pencil";
-import Trash from "lucide-react/dist/esm/icons/trash";
-import ReceiptIcon from "lucide-react/dist/esm/icons/receipt";
-import ArrowRight from "lucide-react/dist/esm/icons/arrow-right";
-import History from "lucide-react/dist/esm/icons/history";
-import Hash from "lucide-react/dist/esm/icons/hash";
-import Eye from "lucide-react/dist/esm/icons/eye";
+import { Plus, Search, FileText, Download, Loader2, MoreVertical, Pencil, Trash, Receipt as ReceiptIcon, ArrowRight, History, Hash, Eye } from "lucide-react";
 import Link from "next/link";
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
@@ -55,6 +43,7 @@ import {
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
 import { useRouter } from "next/navigation";
+import { DataPagination } from "@/components/ui/data-pagination";
 
 interface Invoice {
   id: string;
@@ -64,22 +53,34 @@ interface Invoice {
     name: string;
     doc_number: string;
     direccion_fiscal?: string;
+    persona_contacto_info?: any;
+    telefono_empresa?: string;
+    email?: string;
+    porcent_retencion_iva?: number;
+    porcent_retencion_islr?: number;
+    porcent_retencion_municipio?: number;
   };
   type: "FACTURA" | "RECIBO";
   status: "DRAFT" | "SENT" | "PARTIAL" | "PAID" | "OVERDUE" | "CANCELLED";
+  currency_mode?: string;
   issue_date: string;
   due_date: string;
+  proximo_vencimiento_producto?: string | null;
   total_usd: number;
   total_bs: number;
   currency_rate: number;
   subtotal_usd: number;
   tax_amount_usd: number;
+  igtf_amount_usd?: number;
+  subtotal_bs: number;
+  tax_amount_bs: number;
   retention_amount_bs: number;
   invoice_items: any[];
 }
 
 interface Payment {
   id: string;
+  type: string;
   payment_date: string;
   amount_paid: number;
   reference?: string;
@@ -248,6 +249,9 @@ const getStatusBadge = (status: Invoice["status"]) => {
 export default function InvoicePageClient({ initialInvoices, initialPayments }: InvoicePageClientProps) {
   const [searchTerm, setSearchTerm] = useState("");
   const [isSelectionModalOpen, setIsSelectionModalOpen] = useState(false);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [currentPagePayments, setCurrentPagePayments] = useState(1);
+  const ITEMS_PER_PAGE = 20;
   const router = useRouter();
 
   const handleOpenSelection = () => setIsSelectionModalOpen(true);
@@ -274,6 +278,16 @@ export default function InvoicePageClient({ initialInvoices, initialPayments }: 
       return customerName.includes(search) || reference.includes(search);
     });
   }, [initialPayments, searchTerm]);
+
+  const paginatedInvoices = useMemo(() => {
+    const start = (currentPage - 1) * ITEMS_PER_PAGE;
+    return filteredInvoices.slice(start, start + ITEMS_PER_PAGE);
+  }, [filteredInvoices, currentPage]);
+
+  const paginatedPayments = useMemo(() => {
+    const start = (currentPagePayments - 1) * ITEMS_PER_PAGE;
+    return filteredPayments.slice(start, start + ITEMS_PER_PAGE);
+  }, [filteredPayments, currentPagePayments]);
 
   return (
     <div className="p-6 space-y-6">
@@ -306,7 +320,7 @@ export default function InvoicePageClient({ initialInvoices, initialPayments }: 
             <Input
               placeholder="Buscar..."
               value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
+              onChange={(e) => { setSearchTerm(e.target.value); setCurrentPage(1); setCurrentPagePayments(1); }}
               className="pl-10 h-9 border-slate-200"
             />
           </div>
@@ -336,7 +350,7 @@ export default function InvoicePageClient({ initialInvoices, initialPayments }: 
                     </TableCell>
                   </TableRow>
                 ) : (
-                  filteredInvoices.map((invoice) => (
+                  paginatedInvoices.map((invoice) => (
                     <TableRow key={invoice.id} className="hover:bg-slate-50/50 transition-colors text-xs">
                       <TableCell className="font-mono text-slate-600 font-bold">
                         {invoice.invoice_number ? String(invoice.invoice_number).padStart(6, '0') : "-"}
@@ -364,6 +378,14 @@ export default function InvoicePageClient({ initialInvoices, initialPayments }: 
                 )}
               </TableBody>
             </Table>
+            {filteredInvoices.length > ITEMS_PER_PAGE && (
+              <DataPagination
+                currentPage={currentPage}
+                totalItems={filteredInvoices.length}
+                itemsPerPage={ITEMS_PER_PAGE}
+                onPageChange={setCurrentPage}
+              />
+            )}
           </div>
         </TabsContent>
 
@@ -374,6 +396,7 @@ export default function InvoicePageClient({ initialInvoices, initialPayments }: 
                 <TableRow className="hover:bg-transparent border-slate-100">
                   <TableHead className="text-[10px] font-bold uppercase text-slate-400">Fecha Pago</TableHead>
                   <TableHead className="text-[10px] font-bold uppercase text-slate-400">Cliente</TableHead>
+                  <TableHead className="text-[10px] font-bold uppercase text-slate-400">Tipo</TableHead>
                   <TableHead className="text-[10px] font-bold uppercase text-slate-400">Referencia</TableHead>
                   <TableHead className="text-[10px] font-bold uppercase text-slate-400">Método</TableHead>
                   <TableHead className="text-[10px] font-bold uppercase text-slate-400 text-right">Monto Recibido</TableHead>
@@ -383,12 +406,12 @@ export default function InvoicePageClient({ initialInvoices, initialPayments }: 
               <TableBody>
                 {filteredPayments.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={6} className="text-center py-10 text-slate-500 italic">
+                    <TableCell colSpan={7} className="text-center py-10 text-slate-500 italic">
                       No se han registrado pagos todavía.
                     </TableCell>
                   </TableRow>
                 ) : (
-                  filteredPayments.map((p) => (
+                  paginatedPayments.map((p) => (
                     <TableRow key={p.id} className="border-slate-50 text-xs hover:bg-slate-50/50 transition-colors">
                       <TableCell className="font-medium">{format(new Date(p.payment_date), "dd/MM/yyyy")}</TableCell>
                       <TableCell>
@@ -396,6 +419,11 @@ export default function InvoicePageClient({ initialInvoices, initialPayments }: 
                           <span className="font-bold text-slate-900">{p.customer?.name || "Cliente Desconocido"}</span>
                           <span className="text-[9px] text-slate-400 uppercase">{p.customer?.doc_number || "---"}</span>
                         </div>
+                      </TableCell>
+                      <TableCell>
+                        <Badge variant="outline" className="text-[9px] font-bold uppercase border-slate-200 bg-white">
+                          {p.type}
+                        </Badge>
                       </TableCell>
                       <TableCell className="font-mono text-slate-600 uppercase flex items-center gap-1">
                         <Hash className="h-3 w-3 text-slate-300" /> {p.reference || "S/R"}
@@ -429,6 +457,14 @@ export default function InvoicePageClient({ initialInvoices, initialPayments }: 
                 )}
               </TableBody>
             </Table>
+            {filteredPayments.length > ITEMS_PER_PAGE && (
+              <DataPagination
+                currentPage={currentPagePayments}
+                totalItems={filteredPayments.length}
+                itemsPerPage={ITEMS_PER_PAGE}
+                onPageChange={setCurrentPagePayments}
+              />
+            )}
           </div>
         </TabsContent>
       </Tabs>

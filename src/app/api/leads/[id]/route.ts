@@ -1,11 +1,13 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { auth } from "@/lib/auth";
+import { withApiKeyAuth } from "@/lib/apikey-guard";
 import * as z from "zod";
 
 const leadUpdateSchema = z.object({
   nombre: z.string().min(1).optional(),
   apellido: z.string().min(1).optional(),
+  nombre_empresa: z.string().optional(),
   cedula: z.string().optional().or(z.literal("")),
   email: z.string().email().optional().or(z.literal("")),
   telefono: z.string().optional(),
@@ -23,18 +25,24 @@ export async function PUT(
   req: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  try {
-    const { id } = await params;
-    const session = await auth();
-    if (!session) return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
+  return withApiKeyAuth(req, async (ctx) => {
+    try {
+      const { id } = await params;
+      if (!ctx?.fromApiKey) {
+        const session = ctx?.session ?? await auth();
+        if (!session) return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
+      }
 
     const body = await req.json();
     const validatedData = leadUpdateSchema.parse(body);
 
+    const { productId, priceListId, ...rest } = validatedData;
     const updatedLead = await prisma.lead.update({
       where: { id },
       data: {
-        ...validatedData,
+        ...(rest as any),
+        product: productId ? { connect: { id: productId } } : undefined,
+        priceList: priceListId ? { connect: { id: priceListId } } : undefined,
         fecha_llamada: validatedData.fecha_llamada ? new Date(validatedData.fecha_llamada) : null,
       },
     });
@@ -43,17 +51,21 @@ export async function PUT(
   } catch (error) {
     console.error("Error updating lead:", error);
     return NextResponse.json({ message: "Error al actualizar el prospecto" }, { status: 500 });
-  }
+    }
+  });
 }
 
 export async function DELETE(
   req: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  try {
-    const { id } = await params;
-    const session = await auth();
-    if (!session) return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
+  return withApiKeyAuth(req, async (ctx) => {
+    try {
+      const { id } = await params;
+      if (!ctx?.fromApiKey) {
+        const session = ctx?.session ?? await auth();
+        if (!session) return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
+      }
 
     await prisma.lead.delete({
       where: { id },
@@ -63,5 +75,6 @@ export async function DELETE(
   } catch (error) {
     console.error("Error deleting lead:", error);
     return NextResponse.json({ message: "Error al eliminar el prospecto" }, { status: 500 });
-  }
+    }
+  });
 }

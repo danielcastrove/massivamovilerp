@@ -19,7 +19,7 @@ import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { PDFDownloadLink } from "@react-pdf/renderer";
 import CustomerDetailsPDF from "./CustomerDetailsPDF";
-import { Download, Loader } from "lucide-react";
+import { Download, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
 interface CustomerDetailsModalProps {
@@ -292,7 +292,7 @@ export function CustomerDetailsModal({ isOpen, onClose, customer }: CustomerDeta
                 <div>
                   <SectionTitle>Datos Fiscales</SectionTitle>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <DetailItem label="Tipo Contribuyente" value={customer.settings?.taxType === 'ORDINARY' ? 'Ordinario' : 'Especial'} />
+                    <DetailItem label="Tipo Contribuyente" value={customer.settings?.taxType === 'SPECIAL' ? 'Especial' : 'Ordinario'} />
                     <DetailItem label="Exento de Impuestos" value={customer.settings?.isTaxExempt ? "Sí" : "No"} />
                     <DetailItem label="Agente de Retención" value={customer.is_agente_retencion ? "Sí" : "No"} />
                     <div className="flex space-x-4">

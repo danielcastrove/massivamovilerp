@@ -1,10 +1,11 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { MoreHorizontal, Loader, AlertCircle, Pencil, Trash2 } from "lucide-react";
+import { MoreHorizontal, Loader, AlertCircle, Pencil, Trash2, Search } from "lucide-react";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
@@ -13,6 +14,7 @@ import * as z from "zod";
 import { ProductType, BillingCycle } from "@prisma/client";
 import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert";
 import { ProductsExportModal } from "./ProductsExportModal"; // Import the new modal
+import { DataPagination } from "@/components/ui/data-pagination";
 
 interface Product {
   id: string;
@@ -61,8 +63,16 @@ export function ServicesTab() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
 
+  const ITEMS_PER_PAGE = 20;
+  const [currentPage, setCurrentPage] = useState(1);
+
   // State for Export Modal
   const [isExportModalOpen, setIsExportModalOpen] = useState(false);
+
+  // Filter states
+  const [typeFilter, setTypeFilter] = useState("ALL");
+  const [categoryFilter, setCategoryFilter] = useState("ALL");
+  const [searchTerm, setSearchTerm] = useState("");
 
   async function fetchData() {
     try {
@@ -167,6 +177,33 @@ export function ServicesTab() {
     setDeleteDialogOpen(true);
   };
 
+  const categories = useMemo(() => {
+    const map = new Map<string, string>();
+    products.forEach(p => {
+      if (p.category?.id && !map.has(p.category.id)) map.set(p.category.id, p.category.name);
+    });
+    return Array.from(map, ([id, name]) => ({ id, name }));
+  }, [products]);
+
+  const filteredProducts = useMemo(() => {
+    return products.filter(p => {
+      if (typeFilter !== "ALL" && p.type !== typeFilter) return false;
+      if (categoryFilter !== "ALL" && p.category?.id !== categoryFilter) return false;
+      if (searchTerm) {
+        const term = searchTerm.toLowerCase();
+        const matchName = p.name?.toLowerCase().includes(term);
+        const matchSku = p.sku?.toLowerCase().includes(term);
+        if (!matchName && !matchSku) return false;
+      }
+      return true;
+    });
+  }, [products, typeFilter, categoryFilter, searchTerm]);
+
+  const paginatedProducts = useMemo(() => {
+    const start = (currentPage - 1) * ITEMS_PER_PAGE;
+    return filteredProducts.slice(start, start + ITEMS_PER_PAGE);
+  }, [filteredProducts, currentPage]);
+
 
 
   if (loading) {
@@ -238,28 +275,53 @@ export function ServicesTab() {
       <ProductsExportModal
         isOpen={isExportModalOpen}
         onClose={() => setIsExportModalOpen(false)}
+        products={filteredProducts}
       />
 
       <Card>
         <CardHeader>
-          <div className="flex items-center justify-between">
-            <CardTitle>Servicios</CardTitle>
-            <div className="flex items-center space-x-4">
-              <Button 
-                className="bg-cyan-500 hover:bg-cyan-600 text-white" 
-                onClick={() => setIsExportModalOpen(true)}
-                disabled={loading}
-              >
-                Exportar Productos
-              </Button>
-              <Button 
-                className="bg-cyan-500 hover:bg-cyan-600 text-white" 
-                onClick={() => setCreateDialogOpen(true)}
-                disabled={loading}
-              >
-                Crear Nuevo Servicio
-              </Button>
+          <CardTitle>Servicios</CardTitle>
+          <div className="flex items-center gap-3 flex-wrap">
+            <div className="relative">
+              <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400" />
+              <Input
+                placeholder="Buscar por nombre o SKU"
+                value={searchTerm}
+                onChange={(e) => { setSearchTerm(e.target.value); setCurrentPage(1); }}
+                className="pl-8 h-8 w-52 text-xs"
+              />
             </div>
+            <Select value={typeFilter} onValueChange={(v) => { setTypeFilter(v); setCurrentPage(1); }}>
+              <SelectTrigger className="h-8 w-[150px] text-xs text-slate-600"><SelectValue placeholder="Tipo" /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="ALL">Todos</SelectItem>
+                <SelectItem value="RECURRENT">Recurrente</SelectItem>
+                <SelectItem value="ONE_TIME">Única Vez</SelectItem>
+              </SelectContent>
+            </Select>
+            <Select value={categoryFilter} onValueChange={(v) => { setCategoryFilter(v); setCurrentPage(1); }}>
+              <SelectTrigger className="h-8 w-[180px] text-xs text-slate-600"><SelectValue placeholder="Categoría" /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="ALL">Categoría</SelectItem>
+                {categories.map(c => (
+                  <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <Button
+              className="bg-cyan-500 hover:bg-cyan-600 text-white h-8 text-xs"
+              onClick={() => setIsExportModalOpen(true)}
+              disabled={loading}
+            >
+              Exportar Productos
+            </Button>
+            <Button
+              className="bg-cyan-500 hover:bg-cyan-600 text-white h-8 text-xs"
+              onClick={() => setCreateDialogOpen(true)}
+              disabled={loading}
+            >
+              Crear Nuevo Servicio
+            </Button>
           </div>
         </CardHeader>
         <CardContent>
@@ -268,8 +330,8 @@ export function ServicesTab() {
               <Loader className="h-10 w-10 animate-spin text-cyan-600 mb-4" />
               <p className="text-muted-foreground font-medium animate-pulse">Sincronizando servicios...</p>
             </div>
-          ) : products.length === 0 ? (
-            <div className="text-center py-10 text-muted-foreground">No hay servicios disponibles.</div>
+          ) : filteredProducts.length === 0 ? (
+            <div className="text-center py-10 text-muted-foreground">No hay servicios que coincidan con el filtro.</div>
           ) : (
             <Table>
               <TableHeader>
@@ -283,7 +345,7 @@ export function ServicesTab() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {products.map((service) => {
+                {paginatedProducts.map((service) => {
                   return (
                     <TableRow key={service.id}>
                       <TableCell className="font-mono text-xs font-bold text-cyan-600">{service.sku || "N/A"}</TableCell>
@@ -315,6 +377,14 @@ export function ServicesTab() {
                 })}
               </TableBody>
             </Table>
+          )}
+          {filteredProducts.length > ITEMS_PER_PAGE && (
+            <DataPagination
+              currentPage={currentPage}
+              totalItems={filteredProducts.length}
+              itemsPerPage={ITEMS_PER_PAGE}
+              onPageChange={setCurrentPage}
+            />
           )}
         </CardContent>
       </Card>

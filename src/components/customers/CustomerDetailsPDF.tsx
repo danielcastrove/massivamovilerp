@@ -245,7 +245,7 @@ const CustomerDetailsPDF = ({ customer, serviciosResueltos }: CustomerDetailsPDF
           <View style={styles.contactBox}>
             <Text style={styles.contactHeader}>Configuración Fiscal</Text>
             <View style={styles.grid}>
-                <View style={{ width: '31%' }}><DetailField label="Contribuyente" value={customer.settings?.taxType === 'ORDINARY' ? 'Ordinario' : 'Especial'} /></View>
+                <View style={{ width: '31%' }}><DetailField label="Contribuyente" value={customer.settings?.taxType === 'SPECIAL' ? 'Especial' : 'Ordinario'} /></View>
                 <View style={{ width: '31%' }}><DetailField label="Agente Ret." value={customer.is_agente_retencion ? "Sí" : "No"} /></View>
                 <View style={{ width: '31%' }}><DetailField label="Exento IVA" value={customer.settings?.isTaxExempt ? "Sí" : "No"} /></View>
                 <View style={{ width: '31%' }}><DetailField label="Retención IVA" value={`${customer.porcent_retencion_iva || 0}%`} /></View>

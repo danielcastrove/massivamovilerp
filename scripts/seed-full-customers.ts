@@ -149,7 +149,6 @@ async function main() {
         telefono_celular: `+58${faker.string.numeric(10)}`,
         direccion_fiscal: faker.location.streetAddress(true),
         status: 'ACTIVE',
-        price_list_id: faker.helpers.arrayElement(priceLists).id,
         // --- Optional Fields ---
         sitio_web: faker.internet.url(),
         ciudad: faker.location.city(),

@@ -3,12 +3,18 @@ import { NextResponse } from "next/server";
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/db";
 import { auth } from "@/lib/auth";
+import { withApiKeyAuth } from "@/lib/apikey-guard";
+import { getBillingCycleDays } from "@/lib/utils/recurrence";
+import { addDays } from "date-fns";
 
 export async function POST(req: Request) {
+  return withApiKeyAuth(req, async (ctx) => {
   try {
-    const session = await auth();
-    if (!session || (session.user.role !== "MASSIVA_ADMIN" && session.user.role !== "MASSIVA_EXTRA")) {
-      return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
+    if (!ctx?.fromApiKey) {
+      const session = ctx?.session ?? await auth();
+      if (!session || (session.user.role !== "MASSIVA_ADMIN" && session.user.role !== "MASSIVA_EXTRA")) {
+        return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
+      }
     }
 
     const body = await req.json();
@@ -38,19 +44,26 @@ export async function POST(req: Request) {
       // 1. Obtener parámetros y calcular numeración según el tipo
       const isFactura = type === "FACTURA";
       const docParamKey = isFactura ? "ULTIMO_NUMERO_FACTURA" : "ULTIMO_NUMERO_RECIBO";
+      const controlParamKey = isFactura ? "ULTIMO_NUMERO_CONTROL" : "ULTIMO_NUMERO_CONTROL_RECIBO";
       
       // Obtenemos los parámetros de numeración y control en paralelo
       const [lastDocParam, lastControlParam] = await Promise.all([
         tx.parametro.findUnique({ where: { key: docParamKey } }),
-        tx.parametro.findUnique({ where: { key: "ULTIMO_NUMERO_CONTROL" } })
+        tx.parametro.findUnique({ where: { key: controlParamKey } })
       ]);
 
-      const nextDocNum = (parseInt(lastDocParam?.value || "100000")) + 1;
-      const nextControlNum = (parseInt(lastControlParam?.value || "100000")) + 1;
+      const MAX_DOC_NUM = 9999999;
+      const RESET_DOC_NUM = 1000000;
+
+      let nextDocNum = (parseInt(lastDocParam?.value || "1000000")) + 1;
+      let nextControlNum = (parseInt(lastControlParam?.value || "1000000")) + 1;
+
+      if (nextDocNum > MAX_DOC_NUM) nextDocNum = RESET_DOC_NUM;
+      if (nextControlNum > MAX_DOC_NUM) nextControlNum = RESET_DOC_NUM;
 
       // 2. Actualizar parámetros correlativos en la base de datos
       await tx.parametro.update({ where: { key: docParamKey }, data: { value: nextDocNum.toString() } });
-      await tx.parametro.update({ where: { key: "ULTIMO_NUMERO_CONTROL" }, data: { value: nextControlNum.toString() } });
+      await tx.parametro.update({ where: { key: controlParamKey }, data: { value: nextControlNum.toString() } });
       
       let subtotalUsd = 0;
       const invoiceItemsData = [];
@@ -61,7 +74,7 @@ export async function POST(req: Request) {
 
         invoiceItemsData.push({
           product_id: item.isCustom ? null : item.productId,
-          price_list_id: item.isCustom ? null : (item.priceListId || customer.price_list_id),
+          price_list_id: item.isCustom ? null : item.priceListId,
           is_custom: item.isCustom || false,
           custom_name: item.isCustom ? item.customName : null,
           quantity: item.quantity,
@@ -108,7 +121,26 @@ export async function POST(req: Request) {
       const dueDate = due_date ? new Date(due_date) : new Date();
       if (!due_date) dueDate.setDate(issueDate.getDate() + 30);
 
-      // 3. Crear la Factura
+      // Validación: due_date no puede ser anterior a issue_date
+      if (dueDate < issueDate) {
+        return NextResponse.json(
+          { message: "La fecha de vencimiento no puede ser anterior a la fecha de emisión" },
+          { status: 400 }
+        );
+      }
+
+      // 3. Buscar productos para calcular proximo_vencimiento_producto
+      const products = await tx.product.findMany({
+        where: { id: { in: items.map((i: any) => i.productId) } }
+      });
+
+      const maxBillingDays = Math.max(
+        ...products.map(p => getBillingCycleDays(p.billing_cycle)),
+        30
+      );
+      const proximoVencimiento = addDays(issueDate, maxBillingDays);
+
+      // 4. Crear la Factura
       const newInvoice = await tx.invoice.create({
         data: {
           customer_id: customerId,
@@ -129,19 +161,14 @@ export async function POST(req: Request) {
           tax_amount_bs: new Prisma.Decimal(taxAmountBs),
           total_bs: new Prisma.Decimal(totalBs),
           retention_amount_bs: new Prisma.Decimal(retentionAmountBs),
-          proximo_vencimiento_producto: dueDate,
+          proximo_vencimiento_producto: proximoVencimiento,
           invoice_items: {
             create: invoiceItemsData,
           },
         },
       });
 
-      // 4. Actualizar el próximo vencimiento en el cliente (Core Recurrencia)
-      // Buscamos si hay productos recurrentes para actualizar la fecha global del cliente
-      const products = await tx.product.findMany({
-        where: { id: { in: items.map((i: any) => i.productId) } }
-      });
-
+      // 5. Actualizar el próximo vencimiento en el cliente (Core Recurrencia)
       const hasRecurrent = products.some(p => p.type === "RECURRENT");
       if (hasRecurrent) {
         await tx.customer.update({
@@ -162,39 +189,44 @@ export async function POST(req: Request) {
     console.error("Invoice Error:", error);
     return NextResponse.json({ message: error.message || "Error interno" }, { status: 500 });
   }
+  });
 }
 
-export async function GET() {
-  try {
-    const session = await auth();
-    if (!session) return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
+export async function GET(request: Request) {
+  return withApiKeyAuth(request, async (ctx) => {
+    try {
+      if (!ctx?.fromApiKey) {
+        const session = ctx?.session ?? await auth();
+        if (!session) return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
+      }
 
-    const invoices = await prisma.invoice.findMany({
-      include: {
-        customer: {
-          include: {
-            user: {
-              select: {
-                nombre: true,
-                apellido: true,
-                email: true,
-                telefono_celular: true
+      const invoices = await prisma.invoice.findMany({
+        include: {
+          customer: {
+            include: {
+              user: {
+                select: {
+                  nombre: true,
+                  apellido: true,
+                  email: true,
+                  telefono_celular: true
+                }
               }
+            }
+          },
+          invoice_items: {
+            include: {
+              product: true
             }
           }
         },
-        invoice_items: {
-          include: {
-            product: true
-          }
-        }
-      },
-      orderBy: { issue_date: "desc" }
-    });
+        orderBy: { issue_date: "desc" }
+      });
 
-    return NextResponse.json(invoices);
-  } catch (error) {
-    console.error("Error fetching invoices:", error);
-    return NextResponse.json({ message: "Error fetching invoices" }, { status: 500 });
-  }
+      return NextResponse.json(invoices);
+    } catch (error) {
+      console.error("Error fetching invoices:", error);
+      return NextResponse.json({ message: "Error fetching invoices" }, { status: 500 });
+    }
+  });
 }

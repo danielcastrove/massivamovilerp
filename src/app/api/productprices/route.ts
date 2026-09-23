@@ -1,9 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
+import { withApiKeyAuth } from '@/lib/apikey-guard';
 
 // Handles saving prices for EITHER a single product across multiple lists
 // OR a single price list across multiple products.
 export async function POST(req: NextRequest) {
+  return withApiKeyAuth(req, async (_ctx) => {
   try {
     const body = await req.json();
     const { price_list_id, product_id, prices } = body;
@@ -50,10 +52,12 @@ export async function POST(req: NextRequest) {
     console.error('Error al actualizar los precios:', error);
     return NextResponse.json({ error: 'Error interno del servidor.' }, { status: 500 });
   }
+  });
 }
 
 // Handles fetching prices for EITHER a product OR a price list
 export async function GET(req: NextRequest) {
+  return withApiKeyAuth(req, async (_ctx) => {
   try {
     const { searchParams } = new URL(req.url);
     const price_list_id = searchParams.get('price_list_id');
@@ -121,9 +125,11 @@ export async function GET(req: NextRequest) {
     console.error('Error fetching product prices:', error);
     return NextResponse.json({ message: 'Error interno del servidor' }, { status: 500 });
   }
+  });
 }
 
 export async function DELETE(req: NextRequest) {
+  return withApiKeyAuth(req, async (_ctx) => {
   try {
     const body = await req.json();
     const { price_list_id, product_id } = body;
@@ -146,4 +152,5 @@ export async function DELETE(req: NextRequest) {
     console.error('Error al desenlazar el producto:', error);
     return NextResponse.json({ error: 'Error interno del servidor.' }, { status: 500 });
   }
+  });
 }

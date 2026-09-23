@@ -22,6 +22,7 @@ import {
 import { Loader, AlertCircle, Download } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
+import { DataPagination } from "@/components/ui/data-pagination";
 import { ProductType, BillingCycle } from "@prisma/client";
 
 interface ProductDetail {
@@ -30,7 +31,7 @@ interface ProductDetail {
     name: string;
     type: ProductType;
     billing_cycle: BillingCycle | null;
-    categoryId: string | null;
+    categoryId?: string | null;
     category: {
         id: string;
         name: string;
@@ -40,17 +41,33 @@ interface ProductDetail {
 interface ProductsExportModalProps {
   isOpen: boolean;
   onClose: () => void;
+  products?: ProductDetail[] | null;
 }
+
+const ITEMS_PER_PAGE = 20;
 
 export function ProductsExportModal({
   isOpen,
   onClose,
+  products: propProducts,
 }: ProductsExportModalProps) {
   const [products, setProducts] = React.useState<ProductDetail[]>([]);
   const [isLoading, setIsLoading] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
+  const [currentPage, setCurrentPage] = React.useState(1);
 
   React.useEffect(() => {
+    if (isOpen) setCurrentPage(1);
+  }, [isOpen]);
+
+  React.useEffect(() => {
+    if (propProducts) {
+      setProducts(propProducts);
+      setIsLoading(false);
+      setError(null);
+      return;
+    }
+
     if (!isOpen) {
       setProducts([]);
       return;
@@ -79,7 +96,7 @@ export function ProductsExportModal({
     };
 
     fetchProducts();
-  }, [isOpen]);
+  }, [isOpen, propProducts]);
 
   const handleExport = () => {
     if (!products || products.length === 0) {
@@ -103,6 +120,11 @@ export function ProductsExportModal({
     const filename = `Productos_${date}.xlsx`;
     XLSX.writeFile(workbook, filename);
   };
+
+  const paginatedData = React.useMemo(() => {
+    const start = (currentPage - 1) * ITEMS_PER_PAGE;
+    return products.slice(start, start + ITEMS_PER_PAGE);
+  }, [products, currentPage]);
 
   const typeDisplay: { [key: string]: string } = {
     RECURRENT: "Recurrente",
@@ -145,38 +167,48 @@ export function ProductsExportModal({
         )}
 
         {products && !isLoading && !error && (
-          <div className="max-h-[400px] overflow-y-auto">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>SKU</TableHead>
-                  <TableHead>Nombre</TableHead>
-                  <TableHead>Tipo</TableHead>
-                  <TableHead>Ciclo</TableHead>
-                  <TableHead>Categoría</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {products.length === 0 ? (
+          <>
+            <div className="max-h-[400px] overflow-y-auto">
+              <Table>
+                <TableHeader>
                   <TableRow>
-                    <TableCell colSpan={5} className="text-center text-muted-foreground">
-                      No hay productos disponibles.
-                    </TableCell>
+                    <TableHead>SKU</TableHead>
+                    <TableHead>Nombre</TableHead>
+                    <TableHead>Tipo</TableHead>
+                    <TableHead>Ciclo</TableHead>
+                    <TableHead>Categoría</TableHead>
                   </TableRow>
-                ) : (
-                  products.map((item) => (
-                    <TableRow key={item.id}>
-                      <TableCell className="font-mono text-xs font-bold text-cyan-600">{item.sku || 'N/A'}</TableCell>
-                      <TableCell className="font-medium">{item.name}</TableCell>
-                      <TableCell>{typeDisplay[item.type] || 'N/A'}</TableCell>
-                      <TableCell>{item.billing_cycle ? cycleDisplay[item.billing_cycle] : 'N/A'}</TableCell>
-                      <TableCell>{item.category?.name || 'N/A'}</TableCell>
+                </TableHeader>
+                <TableBody>
+                  {paginatedData.length === 0 ? (
+                    <TableRow>
+                      <TableCell colSpan={5} className="text-center text-muted-foreground">
+                        No hay productos disponibles.
+                      </TableCell>
                     </TableRow>
-                  ))
-                )}
-              </TableBody>
-            </Table>
-          </div>
+                  ) : (
+                    paginatedData.map((item) => (
+                      <TableRow key={item.id}>
+                        <TableCell className="font-mono text-xs font-bold text-cyan-600">{item.sku || 'N/A'}</TableCell>
+                        <TableCell className="font-medium">{item.name}</TableCell>
+                        <TableCell>{typeDisplay[item.type] || 'N/A'}</TableCell>
+                        <TableCell>{item.billing_cycle ? cycleDisplay[item.billing_cycle] : 'N/A'}</TableCell>
+                        <TableCell>{item.category?.name || 'N/A'}</TableCell>
+                      </TableRow>
+                    ))
+                  )}
+                </TableBody>
+              </Table>
+            </div>
+            {products.length > ITEMS_PER_PAGE && (
+              <DataPagination
+                currentPage={currentPage}
+                totalItems={products.length}
+                itemsPerPage={ITEMS_PER_PAGE}
+                onPageChange={setCurrentPage}
+              />
+            )}
+          </>
         )}
       </DialogContent>
     </Dialog>

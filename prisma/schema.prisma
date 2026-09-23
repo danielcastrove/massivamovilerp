@@ -7,23 +7,26 @@ datasource db {
 }
 
 model User {
-  id               String     @id @default(uuid())
-  email            String     @unique
-  password_hash    String
-  nombre           String?
-  apellido         String?
-  telefono_celular String?
-  cargo            String?
-  status           UserStatus @default(ACTIVE)
-  role             UserRole   @default(CLIENTE)
-  is_active        Boolean    @default(true)
-  created_at       DateTime   @default(now())
-  updated_at       DateTime   @updatedAt
-  roles_id         String?
-  accounts         Account[]
-  Customer         Customer?
-  sessions         Session[]
-  roles            Role?      @relation(fields: [roles_id], references: [id])
+  id                     String     @id @default(uuid())
+  email                  String     @unique
+  password_hash          String
+  temp_password_hash     String?
+  temp_password_expires  DateTime?
+  nombre                 String?
+  apellido               String?
+  telefono_celular       String?
+  cargo                  String?
+  status                 UserStatus @default(ACTIVE)
+  role                   UserRole   @default(CLIENTE)
+  is_active              Boolean    @default(true)
+  created_at             DateTime   @default(now())
+  updated_at             DateTime   @updatedAt
+  roles_id               String?
+  accounts               Account[]
+  Customer               Customer?
+  sessions               Session[]
+  roles                  Role?      @relation(fields: [roles_id], references: [id])
+  createdApiKeys         ApiKey[]
 }
 
 model Account {
@@ -144,6 +147,7 @@ model Product {
 model PriceList {
   id             String         @id @default(uuid())
   name           String         @unique
+  url            String?
   created_at     DateTime       @default(now())
   updated_at     DateTime       @updatedAt
   product_prices ProductPrice[]
@@ -193,6 +197,7 @@ model Invoice {
 model Payment {
   id             String        @id @default(uuid())
   customer_id    String?
+  type           String // FACTURA or RECIBO
   amount_paid    Decimal       @db.Decimal(10, 2)
   currency       String        @default("USD") // USD or BS
   exchange_rate  Decimal       @db.Decimal(10, 4)
@@ -227,6 +232,7 @@ model Lead {
   id             String      @id @default(uuid())
   nombre         String
   apellido       String
+  nombre_empresa String?
   cedula         String?
   email          String?
   telefono       String?
@@ -334,6 +340,24 @@ model Category {
   updated_at  DateTime  @updatedAt
 }
 
+model ApiKey {
+  id                String    @id @default(uuid())
+  name              String
+  key_hash          String    @unique
+  key_prefix        String
+  description       String?
+  allowed_endpoints Json
+  is_active         Boolean   @default(true)
+  expires_at        DateTime?
+  rate_limit        Int?
+  created_by        String
+  created_at        DateTime  @default(now())
+  updated_at        DateTime  @updatedAt
+  creator           User      @relation(fields: [created_by], references: [id])
+
+  @@index([key_hash])
+}
+
 enum UserRole {
   MASSIVA_ADMIN
   MASSIVA_EXTRA
@@ -408,6 +432,9 @@ enum Rubro {
   ENTRETENIMIENTO
   CLUBES
   OTRO
+  Eventos
+  Legaltech
+  Fintech
 }
 
 enum SaleType {

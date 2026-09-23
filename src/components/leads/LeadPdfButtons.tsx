@@ -122,7 +122,7 @@ const PreviewDialog = ({ isOpen, onClose, document, leadName }: PreviewDialogPro
           </DialogTitle>
         </DialogHeader>
         <div className="flex-1 bg-slate-200 relative">
-          <BlobProvider document={document}>
+          <BlobProvider document={document as any}>
             {({ url, loading, error }) => {
               if (loading) {
                 return (

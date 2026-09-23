@@ -1,5 +1,6 @@
 "use client";
 
+import { useState, useMemo } from "react";
 import { 
   Dialog, 
   DialogContent, 
@@ -14,6 +15,9 @@ import { format } from "date-fns";
 import { es } from "date-fns/locale";
 import { FileText, Download, User, Calendar, Receipt } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { DataPagination } from "@/components/ui/data-pagination";
+
+const ITEMS_PER_PAGE = 20;
 
 interface ViewInvoiceModalProps {
   isOpen: boolean;
@@ -22,6 +26,15 @@ interface ViewInvoiceModalProps {
 }
 
 export default function ViewInvoiceModal({ isOpen, onClose, invoice }: ViewInvoiceModalProps) {
+  const [currentPage, setCurrentPage] = useState(1);
+
+  const allItems = invoice?.invoice_items ?? [];
+  const totalPages = Math.ceil(allItems.length / ITEMS_PER_PAGE);
+  const paginatedItems = useMemo(
+    () => allItems.slice((currentPage - 1) * ITEMS_PER_PAGE, currentPage * ITEMS_PER_PAGE),
+    [allItems, currentPage]
+  );
+
   if (!invoice) return null;
 
   return (
@@ -63,14 +76,23 @@ export default function ViewInvoiceModal({ isOpen, onClose, invoice }: ViewInvoi
             <div className="space-y-3">
               <div className="flex items-center gap-2 text-slate-400">
                 <Calendar className="h-4 w-4" />
-                <span className="text-[10px] font-black uppercase tracking-widest">Vencimiento del Servicio</span>
+                <span className="text-[10px] font-black uppercase tracking-widest">Vencimientos</span>
               </div>
-              <div className="pl-6">
-                <p className="font-bold text-slate-900 text-sm">
-                  {format(new Date(invoice.proximo_vencimiento_producto || invoice.due_date), "dd 'de' MMMM, yyyy", { locale: es })}
-                </p>
-                <p className="text-xs text-slate-500 italic">Tasa BCV: Bs. {invoice.currency_rate.toFixed(4)}</p>
+              <div className="pl-6 space-y-2">
+                <div>
+                  <p className="text-[10px] text-slate-400 uppercase">Servicio</p>
+                  <p className="font-bold text-slate-900 text-sm">
+                    {format(new Date(invoice.due_date?.replace(' ', 'T')), "dd 'de' MMMM, yyyy", { locale: es })}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-[10px] text-slate-400 uppercase">Factura</p>
+                  <p className="font-bold text-slate-900 text-sm">
+                    {format(new Date(invoice.proximo_vencimiento_producto?.replace(' ', 'T')), "dd 'de' MMMM, yyyy", { locale: es })}
+                  </p>
+                </div>
               </div>
+              <p className="text-xs text-slate-500 italic pl-6">Tasa BCV: Bs. {invoice.currency_rate.toFixed(4)}</p>
             </div>
           </div>
 
@@ -93,8 +115,8 @@ export default function ViewInvoiceModal({ isOpen, onClose, invoice }: ViewInvoi
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {invoice.invoice_items?.map((item: any, idx: number) => (
-                    <TableRow key={idx} className="text-[11px] border-slate-50">
+                  {paginatedItems.map((item: any, idx: number) => (
+                    <TableRow key={(currentPage - 1) * ITEMS_PER_PAGE + idx} className="text-[11px] border-slate-50">
                       <TableCell className="font-medium text-slate-900">
                         {item.is_custom ? item.custom_name : (item.product?.name || "Producto")}
                       </TableCell>
@@ -106,6 +128,14 @@ export default function ViewInvoiceModal({ isOpen, onClose, invoice }: ViewInvoi
                 </TableBody>
               </Table>
             </div>
+            {allItems.length > ITEMS_PER_PAGE && (
+              <DataPagination
+                currentPage={currentPage}
+                totalItems={allItems.length}
+                itemsPerPage={ITEMS_PER_PAGE}
+                onPageChange={setCurrentPage}
+              />
+            )}
           </div>
 
           {/* Totals */}

@@ -53,7 +53,7 @@ async function main() {
     data: {
       customer_id: customer.id,
       type: 'FACTURA',
-      status: 'PAID',
+      status: 'SENT',
       issue_date: now,
       due_date: now,
       proximo_vencimiento_producto: expirationDate,
@@ -86,6 +86,7 @@ async function main() {
     await prisma.payment.create({
       data: {
         customer_id: customer.id,
+        type: 'FACTURA',
         amount_paid: 100,
         currency: 'USD',
         exchange_rate: 1,
@@ -102,14 +103,15 @@ async function main() {
   // 5. Ejecutar la lógica del cron directamente
   console.log("\n--- Ejecutando lógica de check-expirations ---");
 
-  const in7Days = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
+  const past10Days = new Date(now.getTime() - 10 * 24 * 60 * 60 * 1000);
+  const in10Days = new Date(now.getTime() + 10 * 24 * 60 * 60 * 1000);
 
   const expiringInvoices = await prisma.invoice.findMany({
     where: {
-      status: 'PAID',
+      status: 'SENT',
       proximo_vencimiento_producto: {
-        gte: now,
-        lte: in7Days,
+        gte: past10Days,
+        lte: in10Days,
       },
     },
     include: {

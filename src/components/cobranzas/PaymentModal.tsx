@@ -30,6 +30,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { differenceInDays } from "date-fns";
 
 const paymentSchema = z.object({
+  type: z.enum(["FACTURA", "RECIBO"]),
   amountPaid: z.number().min(0.01, "El monto debe ser mayor a 0"),
   currency: z.enum(["USD", "BS"]),
   exchangeRate: z.number().min(1),
@@ -58,6 +59,7 @@ export default function PaymentModal({ isOpen, onClose, customer, bcvRate, onSuc
   const form = useForm<PaymentFormValues>({
     resolver: zodResolver(paymentSchema),
     defaultValues: {
+      type: "FACTURA",
       amountPaid: 0,
       currency: "USD",
       exchangeRate: bcvRate,
@@ -74,6 +76,7 @@ export default function PaymentModal({ isOpen, onClose, customer, bcvRate, onSuc
   useEffect(() => {
     if (isOpen && customer) {
       form.reset({
+        type: "FACTURA",
         amountPaid: 0,
         currency: "USD",
         exchangeRate: bcvRate,
@@ -118,6 +121,15 @@ export default function PaymentModal({ isOpen, onClose, customer, bcvRate, onSuc
     
     form.setValue("amountPaid", finalAmount);
   }, [watchInvoices, watchCurrency, customer, bcvRate, form, latestInvoices]);
+
+  // Derivar tipo del documento automticamente segn la factura seleccionada
+  useEffect(() => {
+    if (!customer || !watchInvoices.length) return;
+    const selectedInv = customer.invoices?.find((inv: any) => watchInvoices.includes(inv.id));
+    if (selectedInv) {
+      form.setValue("type", selectedInv.type);
+    }
+  }, [watchInvoices, customer, form]);
 
   async function onSubmit(values: PaymentFormValues) {
     setLoading(true);

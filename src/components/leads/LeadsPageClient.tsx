@@ -24,7 +24,11 @@ import {
   ExternalLink,
   Star,
   Eye,
-  LayoutGrid
+  LayoutGrid,
+  Filter,
+  CalendarDays,
+  X,
+  MessageSquare
 } from "lucide-react";
 import { 
   DropdownMenu, 
@@ -54,7 +58,9 @@ import { Spinner } from "@/components/ui/spinner";
 import { Badge } from "@/components/ui/badge";
 import { LeadFormModal } from "./LeadFormModal";
 import { LeadPdfButtons } from "./LeadPdfButtons";
-import { format } from "date-fns";
+import { ContactModal, ContactEntity } from "@/components/customers/ContactModal";
+import { DataPagination } from "@/components/ui/data-pagination";
+import { format, startOfDay, endOfDay } from "date-fns";
 import { es } from "date-fns/locale";
 import * as XLSX from "xlsx";
 
@@ -62,6 +68,7 @@ export interface Lead {
   id: string;
   nombre: string;
   apellido: string;
+  nombre_empresa?: string;
   cedula?: string;
   email?: string;
   telefono?: string;
@@ -87,11 +94,17 @@ const statusConfig: Record<string, { label: string, color: string }> = {
   ESPERANDO_APROBACION: { label: "Esperando Aprobación", color: "bg-amber-100 text-amber-700" },
 };
 
+const ITEMS_PER_PAGE = 20;
+
 export default function LeadsPageClient({ initialLeads = [] }: { initialLeads?: Lead[] }) {
   const [leads, setLeads] = useState<Lead[]>(initialLeads);
   const [loading, setLoading] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
   const [typeFilter, setTypeFilter] = useState<string>("ALL");
+  const [statusFilter, setStatusFilter] = useState<string>("ALL");
+  const [filterStartDate, setFilterStartDate] = useState("");
+  const [filterEndDate, setFilterEndDate] = useState("");
+  const [currentPage, setCurrentPage] = useState(1);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [selectedLead, setSelectedLead] = useState<Lead | undefined>(undefined);
   const [isReadOnly, setIsReadOnly] = useState(false);
@@ -100,6 +113,9 @@ export default function LeadsPageClient({ initialLeads = [] }: { initialLeads?: 
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
   const [leadToDelete, setLeadToDelete] = useState<string | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [contactModalOpen, setContactModalOpen] = useState(false);
+  const [contactChannel, setContactChannel] = useState<"SMS" | "WHATSAPP" | "EMAIL">("SMS");
+  const [contactLead, setContactLead] = useState<ContactEntity | undefined>(undefined);
 
   const fetchLeads = async () => {
     setLoading(true);
@@ -121,6 +137,18 @@ export default function LeadsPageClient({ initialLeads = [] }: { initialLeads?: 
     setLeads(initialLeads);
   }, [initialLeads]);
 
+  const parseDateInput = (value: string): Date | null => {
+    if (!value) return null;
+    const [y, m, d] = value.split("-").map(Number);
+    if (!y || !m || !d) return null;
+    return new Date(y, m - 1, d);
+  };
+
+  const handleClearDateFilters = () => {
+    setFilterStartDate("");
+    setFilterEndDate("");
+  };
+
   const filteredLeads = useMemo(() => {
     let result = leads;
 
@@ -139,8 +167,28 @@ export default function LeadsPageClient({ initialLeads = [] }: { initialLeads?: 
       result = result.filter(l => l.tipo_lead === typeFilter);
     }
 
+    if (statusFilter !== "ALL") {
+      result = result.filter(l => l.status === statusFilter);
+    }
+
+    // Filtro por fecha de gestión (fecha_llamada)
+    if (filterStartDate || filterEndDate) {
+      const start = filterStartDate ? startOfDay(parseDateInput(filterStartDate)!).getTime() : -Infinity;
+      const end = filterEndDate ? endOfDay(parseDateInput(filterEndDate)!).getTime() : Infinity;
+      result = result.filter(l => {
+        if (!l.fecha_llamada) return false;
+        const t = new Date(l.fecha_llamada).getTime();
+        return t >= start && t <= end;
+      });
+    }
+
     return result;
-  }, [leads, searchTerm, typeFilter]);
+  }, [leads, searchTerm, typeFilter, statusFilter, filterStartDate, filterEndDate]);
+
+  const paginatedLeads = useMemo(() => {
+    const start = (currentPage - 1) * ITEMS_PER_PAGE;
+    return filteredLeads.slice(start, start + ITEMS_PER_PAGE);
+  }, [filteredLeads, currentPage]);
 
   const handleNewLead = () => {
     setSelectedLead(undefined);
@@ -163,6 +211,18 @@ export default function LeadsPageClient({ initialLeads = [] }: { initialLeads?: 
   const handleDeleteLead = (id: string) => {
     setLeadToDelete(id);
     setIsDeleteModalOpen(true);
+  };
+
+  const handleContactLead = (lead: Lead, channel: "SMS" | "WHATSAPP" | "EMAIL") => {
+    setContactLead({
+      id: lead.id,
+      name: `${lead.nombre} ${lead.apellido}`.trim(),
+      doc_number: lead.cedula || "—",
+      email: lead.email,
+      telefono_empresa: lead.telefono,
+    });
+    setContactChannel(channel);
+    setContactModalOpen(true);
   };
 
   const executeDelete = async () => {
@@ -189,9 +249,10 @@ export default function LeadsPageClient({ initialLeads = [] }: { initialLeads?: 
   };
 
   const handleExportExcel = () => {
-    const dataToExport = leads.map(lead => ({
+    const dataToExport = filteredLeads.map(lead => ({
       'Nombre': lead.nombre,
       'Apellido': lead.apellido,
+      'Empresa': lead.nombre_empresa || 'N/A',
       'Cédula/RIF': lead.cedula || 'N/A',
       'Email': lead.email || 'N/A',
       'Teléfono': lead.telefono || 'N/A',
@@ -237,18 +298,18 @@ export default function LeadsPageClient({ initialLeads = [] }: { initialLeads?: 
         </div>
       </div>
 
-      <div className="flex flex-col md:flex-row items-center gap-4 bg-white p-4 rounded-lg border shadow-sm">
-        <div className="relative flex-1 w-full">
+      <div className="flex flex-wrap items-center gap-3 bg-white p-4 rounded-lg border shadow-sm">
+        <div className="relative flex-1 min-w-[220px]">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
           <Input
             placeholder="Buscar prospecto por nombre o email..."
             value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
+            onChange={(e) => { setSearchTerm(e.target.value); setCurrentPage(1); }}
             className="pl-10"
           />
         </div>
         <div className="w-full md:w-[200px]">
-          <Select value={typeFilter} onValueChange={setTypeFilter}>
+          <Select value={typeFilter} onValueChange={(v) => { setTypeFilter(v); setCurrentPage(1); }}>
             <SelectTrigger className="w-full">
               <div className="flex items-center gap-2">
                 <LayoutGrid className="h-4 w-4 text-slate-400" />
@@ -262,6 +323,49 @@ export default function LeadsPageClient({ initialLeads = [] }: { initialLeads?: 
             </SelectContent>
           </Select>
         </div>
+        <div className="w-full md:w-[200px]">
+          <Select value={statusFilter} onValueChange={(v) => { setStatusFilter(v); setCurrentPage(1); }}>
+            <SelectTrigger className="w-full">
+              <div className="flex items-center gap-2">
+                <Filter className="h-4 w-4 text-slate-400" />
+                <SelectValue placeholder="Estado" />
+              </div>
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="ALL">Todos los estados</SelectItem>
+              {Object.entries(statusConfig).map(([value, cfg]) => (
+                <SelectItem key={value} value={value}>{cfg.label}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+        <div className="flex flex-col gap-1">
+          <span className="text-[9px] font-bold uppercase text-slate-400 tracking-wide flex items-center gap-1">
+            <CalendarDays className="h-3 w-3" /> Fecha Inicio
+          </span>
+          <Input
+            type="date"
+            className="h-10 w-[150px] border-slate-200 text-xs text-slate-600"
+            value={filterStartDate}
+            onChange={(e) => { setFilterStartDate(e.target.value); setCurrentPage(1); }}
+          />
+        </div>
+        <div className="flex flex-col gap-1">
+          <span className="text-[9px] font-bold uppercase text-slate-400 tracking-wide flex items-center gap-1">
+            <CalendarDays className="h-3 w-3" /> Fecha Fin
+          </span>
+          <Input
+            type="date"
+            className="h-10 w-[150px] border-slate-200 text-xs text-slate-600"
+            value={filterEndDate}
+            onChange={(e) => { setFilterEndDate(e.target.value); setCurrentPage(1); }}
+          />
+        </div>
+        {(filterStartDate || filterEndDate) && (
+          <Button variant="ghost" size="sm" className="h-10 text-[10px] text-slate-500 hover:text-red-600" onClick={handleClearDateFilters}>
+            <X className="h-3.5 w-3.5 mr-1" /> Limpiar fechas
+          </Button>
+        )}
       </div>
 
       <div className="bg-white rounded-lg border shadow-sm overflow-hidden">
@@ -290,7 +394,7 @@ export default function LeadsPageClient({ initialLeads = [] }: { initialLeads?: 
                   </TableCell>
                 </TableRow>
               ) : (
-                filteredLeads.map((lead) => (
+                paginatedLeads.map((lead) => (
                   <TableRow key={lead.id} className="hover:bg-slate-50/50 transition-colors">
                     <TableCell>
                       <div className="flex flex-col">
@@ -332,6 +436,16 @@ export default function LeadsPageClient({ initialLeads = [] }: { initialLeads?: 
                             </Button>
                           </DropdownMenuTrigger>
                           <DropdownMenuContent align="end">
+                            <DropdownMenuItem onClick={() => handleContactLead(lead, "SMS")} className="cursor-pointer">
+                              <MessageSquare className="mr-2 h-4 w-4 text-blue-600" /> Enviar SMS
+                            </DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => handleContactLead(lead, "WHATSAPP")} className="cursor-pointer">
+                              <Phone className="mr-2 h-4 w-4 text-emerald-600" /> Enviar WhatsApp
+                            </DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => handleContactLead(lead, "EMAIL")} className="cursor-pointer">
+                              <Mail className="mr-2 h-4 w-4 text-violet-600" /> Enviar Email
+                            </DropdownMenuItem>
+                            <DropdownMenuSeparator />
                             <DropdownMenuItem onClick={() => handleViewLead(lead)} className="cursor-pointer">
                               <Eye className="mr-2 h-4 w-4" /> Ver Detalles
                             </DropdownMenuItem>
@@ -354,6 +468,14 @@ export default function LeadsPageClient({ initialLeads = [] }: { initialLeads?: 
               )}
             </TableBody>
           </Table>
+        )}
+        {filteredLeads.length > ITEMS_PER_PAGE && (
+          <DataPagination
+            currentPage={currentPage}
+            totalItems={filteredLeads.length}
+            itemsPerPage={ITEMS_PER_PAGE}
+            onPageChange={setCurrentPage}
+          />
         )}
       </div>
 
@@ -389,6 +511,19 @@ export default function LeadsPageClient({ initialLeads = [] }: { initialLeads?: 
         lead={selectedLead}
         readOnly={isReadOnly}
       />
+
+      {contactLead && (
+        <ContactModal
+          isOpen={contactModalOpen}
+          onClose={() => {
+            setContactModalOpen(false);
+            setContactLead(undefined);
+          }}
+          entity={contactLead}
+          channel={contactChannel}
+          apiBase="/api/leads"
+        />
+      )}
     </div>
   );
 }

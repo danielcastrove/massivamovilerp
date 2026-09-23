@@ -35,7 +35,7 @@ export default async function CobranzasPage() {
             status: { in: ["SENT", "PARTIAL", "OVERDUE"] }
           },
           include: {
-            invoice_items: { include: { product: true } }
+            invoice_items: { include: { product: { include: { category: true } } } }
           },
           orderBy: { proximo_vencimiento_producto: "asc" }
         }
@@ -80,7 +80,10 @@ export default async function CobranzasPage() {
           quantity: Number(item.quantity),
           unit_price_usd: Number(item.unit_price_usd),
           total_usd: Number(item.total_usd),
-          product: item.product ? { name: item.product.name } : null,
+          product: item.product ? {
+            name: item.product.name,
+            category: item.product.category ? { id: item.product.category.id, name: item.product.category.name } : null,
+          } : null,
           custom_name: item.custom_name,
         }))
       }))

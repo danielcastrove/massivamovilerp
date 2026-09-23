@@ -5,9 +5,10 @@ import * as z from "zod";
 import { prisma } from "@/lib/db";
 import { customerFormSchema, customerFormSchemaTransformed } from "@/lib/validations/customer";
 import { auth } from '@/lib/auth';
+import { withApiKeyAuth } from '@/lib/apikey-guard';
 
 // Make sure formatPhoneNumberForSupabase is available at the module scope
-const formatPhoneNumberForSupabase = (phoneNumber: string | undefined): string | undefined => {
+const formatPhoneNumberForSupabase = (phoneNumber: string | null | undefined): string | null | undefined => {
   if (!phoneNumber) return phoneNumber;
   let cleanedNumber = phoneNumber.replace(/\D/g, '');
   if (cleanedNumber.startsWith('0')) {
@@ -23,11 +24,14 @@ const formatPhoneNumberForSupabase = (phoneNumber: string | undefined): string |
 
 
 export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  return withApiKeyAuth(req, async (ctx) => {
   try {
     const { id } = await params;
-    const session = await auth();
-    if (!session || !session.user || (session.user.role !== 'MASSIVA_ADMIN' && session.user.role !== 'MASSIVA_EXTRA')) {
-      return NextResponse.json({ message: 'Unauthorized' }, { status: 401 });
+    if (!ctx?.fromApiKey) {
+      const session = ctx?.session ?? await auth();
+      if (!session || !session.user || (session.user.role !== 'MASSIVA_ADMIN' && session.user.role !== 'MASSIVA_EXTRA')) {
+        return NextResponse.json({ message: 'Unauthorized' }, { status: 401 });
+      }
     }
 
     const body = await req.json();
@@ -143,10 +147,7 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
       porcent_retencion_iva: porcent_retencion_iva !== undefined && porcent_retencion_iva !== null ? new Prisma.Decimal(porcent_retencion_iva) : null,
       porcent_retencion_islr: porcent_retencion_islr !== undefined && porcent_retencion_islr !== null ? new Prisma.Decimal(porcent_retencion_islr) : null,
       porcent_retencion_municipio: porcent_retencion_municipio !== undefined && porcent_retencion_municipio !== null ? new Prisma.Decimal(porcent_retencion_municipio) : null,
-      representante_legal_info: {
-          ...representante_legal_info,
-          telefono_celular: formatPhoneNumberForSupabase(representante_legal_info.telefonoNumber),
-      } as any,
+      representante_legal_info: representante_legal_info as any,
       user: finalUserId ? { connect: { id: finalUserId } } : { disconnect: true },
     };
 
@@ -170,14 +171,18 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
     const errorMessage = error instanceof Error ? error.message : "Ocurrió un error inesperado.";
     return NextResponse.json({ message: errorMessage }, { status: 500 });
   }
+  });
 }
 
 export async function DELETE(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  return withApiKeyAuth(req, async (ctx) => {
     try {
       const { id } = await params;
-      const session = await auth();
-      if (!session || !session.user || session.user.role !== 'MASSIVA_ADMIN') {
-        return NextResponse.json({ message: 'Forbidden' }, { status: 403 });
+      if (!ctx?.fromApiKey) {
+        const session = ctx?.session ?? await auth();
+        if (!session || !session.user || session.user.role !== 'MASSIVA_ADMIN') {
+          return NextResponse.json({ message: 'Forbidden' }, { status: 403 });
+        }
       }
 
       // Proceso de eliminación segura con dependencias
@@ -234,4 +239,5 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
       const errorMessage = error instanceof Error ? error.message : "Ocurrió un error inesperado.";
       return NextResponse.json({ message: errorMessage }, { status: 500 });
     }
-  }
+  });
+}

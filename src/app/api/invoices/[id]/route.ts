@@ -42,6 +42,7 @@ export async function PUT(
           type,
           currency_mode: currencyMode,
           due_date: due_date ? new Date(due_date) : undefined,
+          proximo_vencimiento_producto: due_date ? new Date(due_date) : undefined,
           currency_rate: currencyRate,
           subtotal_usd: subtotalUsd,
           tax_amount_usd: taxAmountUsd,

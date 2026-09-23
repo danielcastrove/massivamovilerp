@@ -20,6 +20,8 @@ import {
 } from "lucide-react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
+import { addDays, format } from "date-fns";
+import { getBillingCycleDays } from "@/lib/utils/recurrence";
 
 import { Button } from "@/components/ui/button";
 import {
@@ -116,6 +118,8 @@ export default function InvoiceForm({
   const [loading, setLoading] = useState(false);
   // Cache de productos por lista de precios para evitar fetchings repetitivos
   const [pricesCache, setPricesCache] = useState<Record<string, any[]>>({});
+  // Track si el usuario editó manualmente la fecha de vencimiento
+  const [userEditedDueDate, setUserEditedDueDate] = useState(false);
 
   const form = useForm<InvoiceFormValues>({
     resolver: zodResolver(invoiceFormSchema),
@@ -155,12 +159,6 @@ export default function InvoiceForm({
 
   const invoiceType = form.watch("type");
 
-  const watchedDueDate = useWatch({
-    control: form.control,
-    name: "dueDate",
-    defaultValue: new Date().toISOString().split('T')[0]
-  });
-
   const watchedApplyIgtf = useWatch({
     control: form.control,
     name: "applyIgtf",
@@ -176,6 +174,34 @@ export default function InvoiceForm({
       });
     }
   }, [isEditing, initialInvoiceData]);
+
+  // --- Auto-calcula dueDate cuando cambian los items (si el usuario no lo editó) ---
+  useEffect(() => {
+    if (isEditing || userEditedDueDate) return;
+
+    const allPrices = Object.values(pricesCache).flat();
+    if (allPrices.length === 0) return;
+
+    const productIds = watchedItems
+      .filter((item: any) => item.productId && !item.isCustom)
+      .map((item: any) => item.productId);
+
+    if (productIds.length === 0) return;
+
+    const billingDaysList = productIds
+      .map((id: string) => {
+        const price = allPrices.find((p: any) => p.product_id === id);
+        return getBillingCycleDays(price?.product?.billing_cycle);
+      })
+      .filter((d: number) => d > 0);
+
+    if (billingDaysList.length > 0) {
+      const maxDays = Math.max(...billingDaysList);
+      const newDueDate = addDays(new Date(), maxDays);
+      form.setValue("dueDate", format(newDueDate, "yyyy-MM-dd"), { shouldValidate: true });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [watchedItems, pricesCache, userEditedDueDate, isEditing]);
 
   // --- Función para obtener precios de una lista específica ---
   const fetchPricesForList = async (listId: string) => {
@@ -426,12 +452,17 @@ export default function InvoiceForm({
                     name="dueDate"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel className="text-xs font-bold uppercase text-slate-400">Fecha de Vencimiento</FormLabel>
+                        <FormLabel className="text-xs font-bold uppercase text-slate-400">Vencimiento de la Factura</FormLabel>
                         <FormControl>
                           <Input 
                             type="date" 
                             className="border-slate-200 h-11"
+                            min={format(new Date(), "yyyy-MM-dd")}
                             {...field}
+                            onChange={(e) => {
+                              setUserEditedDueDate(true);
+                              field.onChange(e);
+                            }}
                           />
                         </FormControl>
                         <FormMessage />
@@ -548,7 +579,7 @@ export default function InvoiceForm({
                                 <Select onValueChange={(v) => {
                                   pField.onChange(v);
                                   const currentListId = form.getValues(`items.${index}.priceListId`);
-                                  const currentPrices = pricesCache[currentListId] || [];
+                                  const currentPrices = currentListId ? (pricesCache[currentListId] || []) : [];
                                   const p = currentPrices.find(ap => ap.product_id === v);
                                   if (p) {
                                     const price = Number(p.price_usd);
@@ -558,7 +589,7 @@ export default function InvoiceForm({
                                 }} value={pField.value} disabled={!watchedItems[index]?.priceListId}>
                                   <FormControl><SelectTrigger className="border-slate-200 text-[11px] h-9"><SelectValue placeholder="Servicio..." /></SelectTrigger></FormControl>
                                   <SelectContent>
-                                    {(pricesCache[watchedItems[index]?.priceListId] || []).map((p: any) => (
+                                    {((watchedItems[index]?.priceListId ? pricesCache[watchedItems[index]?.priceListId] : undefined) || []).map((p: any) => (
                                       <SelectItem key={p.product_id} value={p.product_id}>{p.product.name}</SelectItem>
                                     ))}
                                   </SelectContent>

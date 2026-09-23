@@ -12,6 +12,7 @@ const formSchema = z.object({
   name: z.string().min(2, {
     message: "El nombre debe tener al menos 2 caracteres.",
   }),
+  url: z.union([z.string().url("Ingresa una URL válida."), z.literal("")]).optional(),
 });
 
 interface PriceListFormProps {
@@ -23,7 +24,7 @@ interface PriceListFormProps {
 export function PriceListForm({ onSubmit, defaultValues, isSubmitting }: PriceListFormProps) {
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
-    defaultValues: defaultValues || { name: "" },
+    defaultValues: defaultValues || { name: "", url: "" },
   });
 
   return (
@@ -37,6 +38,19 @@ export function PriceListForm({ onSubmit, defaultValues, isSubmitting }: PriceLi
               <FormLabel>Nombre de la Lista</FormLabel>
               <FormControl>
                 <Input placeholder="Ej: Lista Retail" {...field} />
+              </FormControl>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+        <FormField
+          control={form.control}
+          name="url"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel>URL</FormLabel>
+              <FormControl>
+                <Input placeholder="https://..." {...field} />
               </FormControl>
               <FormMessage />
             </FormItem>

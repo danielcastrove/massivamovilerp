@@ -1,26 +1,30 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { MoreHorizontal, Loader, AlertCircle, Trash2, Eye, Pencil } from "lucide-react"; // Added Trash2
+import { MoreHorizontal, Loader, AlertCircle, Trash2, Eye, Pencil, Search } from "lucide-react";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogDescription, DialogFooter } from "@/components/ui/dialog"; // Added DialogFooter
 import { PriceListForm } from "./PriceListForm";
 import * as z from "zod";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { PriceListDetailsModal } from "./PriceListDetailsModal";
+import { DataPagination } from "@/components/ui/data-pagination";
 
 const formSchema = z.object({
   name: z.string().min(2, {
     message: "El nombre debe tener al menos 2 caracteres.",
   }),
+  url: z.union([z.string().url("Ingresa una URL válida."), z.literal("")]).optional(),
 });
 
 interface PriceList {
   id: string;
   name: string;
+  url?: string | null;
 }
 
 export function PriceListsTab() {
@@ -46,6 +50,9 @@ export function PriceListsTab() {
   
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
+  const [searchTerm, setSearchTerm] = useState("");
+  const ITEMS_PER_PAGE = 20;
+  const [currentPage, setCurrentPage] = useState(1);
 
   async function fetchPriceLists() {
     try {
@@ -164,6 +171,21 @@ export function PriceListsTab() {
     setDetailsModalOpen(true);
   };
 
+  const filteredPriceLists = useMemo(() => {
+    if (!searchTerm) return priceLists;
+    const term = searchTerm.toLowerCase();
+    return priceLists.filter((list) => {
+      const matchName = list.name?.toLowerCase().includes(term);
+      const matchUrl = list.url?.toLowerCase().includes(term);
+      return matchName || matchUrl;
+    });
+  }, [priceLists, searchTerm]);
+
+  const paginatedPriceLists = useMemo(() => {
+    const start = (currentPage - 1) * ITEMS_PER_PAGE;
+    return filteredPriceLists.slice(start, start + ITEMS_PER_PAGE);
+  }, [filteredPriceLists, currentPage]);
+
 
   if (loading) {
     return (
@@ -238,7 +260,7 @@ export function PriceListsTab() {
           <PriceListForm 
             onSubmit={handleEditSubmit}
             isSubmitting={isSubmitting}
-            defaultValues={{ name: editingPriceList?.name || '' }}
+            defaultValues={{ name: editingPriceList?.name || '', url: editingPriceList?.url || '' }}
           />
         </DialogContent>
       </Dialog>
@@ -289,13 +311,24 @@ export function PriceListsTab() {
         <CardHeader>
           <div className="flex items-center justify-between">
             <CardTitle>Listas de Precios</CardTitle>
-            <Button 
-              className="bg-cyan-500 hover:bg-cyan-600 text-white" 
-              onClick={() => setCreateDialogOpen(true)}
-              disabled={loading}
-            >
-              Crear Nueva Lista
-            </Button>
+            <div className="flex items-center gap-3">
+              <div className="relative">
+                <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400" />
+                <Input
+                  placeholder="Buscar por nombre o URL"
+                  value={searchTerm}
+                  onChange={(e) => { setSearchTerm(e.target.value); setCurrentPage(1); }}
+                  className="pl-8 h-8 w-52 text-xs"
+                />
+              </div>
+              <Button 
+                className="bg-cyan-500 hover:bg-cyan-600 text-white" 
+                onClick={() => setCreateDialogOpen(true)}
+                disabled={loading}
+              >
+                Crear Nueva Lista
+              </Button>
+            </div>
           </div>
         </CardHeader>
         <CardContent>
@@ -304,22 +337,32 @@ export function PriceListsTab() {
               <Loader className="h-10 w-10 animate-spin text-cyan-600 mb-4" />
               <p className="text-muted-foreground font-medium animate-pulse">Sincronizando listas de precios...</p>
             </div>
-          ) : priceLists.length === 0 ? (
+          ) : filteredPriceLists.length === 0 ? (
             <div className="flex items-center justify-center h-40 text-sm text-muted-foreground">
-              No hay listas de precios disponibles.
+              No hay listas de precios que coincidan con la búsqueda.
             </div>
           ) : (
             <Table>
               <TableHeader>
                 <TableRow>
                   <TableHead className="text-left">Nombre de la Lista</TableHead>
+                  <TableHead className="text-left">URL</TableHead>
                   <TableHead className="text-right">Acciones</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {priceLists.map((list) => (
+                {paginatedPriceLists.map((list) => (
                   <TableRow key={list.id}>
                     <TableCell className="font-medium">{list.name}</TableCell>
+                    <TableCell>
+                      {list.url ? (
+                        <a href={list.url} target="_blank" rel="noopener noreferrer" className="text-cyan-600 hover:underline text-sm">
+                          {list.url}
+                        </a>
+                      ) : (
+                        <span className="text-muted-foreground">—</span>
+                      )}
+                    </TableCell>
                     <TableCell className="text-right">
                       <DropdownMenu>
                         <DropdownMenuTrigger asChild>
@@ -346,6 +389,14 @@ export function PriceListsTab() {
                 ))}
               </TableBody>
             </Table>
+          )}
+          {filteredPriceLists.length > ITEMS_PER_PAGE && (
+            <DataPagination
+              currentPage={currentPage}
+              totalItems={filteredPriceLists.length}
+              itemsPerPage={ITEMS_PER_PAGE}
+              onPageChange={setCurrentPage}
+            />
           )}
         </CardContent>
       </Card>

@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { auth } from '@/lib/auth';
 import { prisma } from '@/lib/db';
-import { UserRole, Modulo } from '@prisma/client';
+import { getAllowedModulePaths } from '@/lib/navigation';
 
 // Define the shape of the module links we want to return
 interface ModuleLink {
@@ -18,54 +18,12 @@ export async function GET() {
   }
 
   try {
-    const user = await prisma.user.findUnique({
-      where: { id: session.user.id },
-      include: {
-        roles: {
-          include: {
-            modulos: {
-                include: {
-                    modulo: true
-                }
-            },
-          },
-        },
-      },
+    const allowedModulePaths = await getAllowedModulePaths(session.user.id, session.user.role);
+
+    const allowedModules = await prisma.modulo.findMany({
+      where: { path: { in: allowedModulePaths } },
+      orderBy: { name: 'asc' },
     });
-
-    if (!user) {
-      return new NextResponse('User not found', { status: 404 });
-    }
-
-    let allowedModules: Modulo[] = [];
-
-    switch (user.role) {
-      case UserRole.MASSIVA_ADMIN:
-        allowedModules = await prisma.modulo.findMany({ orderBy: { name: 'asc' }});
-        break;
-
-      case UserRole.MASSIVA_EXTRA:
-        if (user.roles && user.roles.modulos) {
-          allowedModules = user.roles.modulos.map(m2r => m2r.modulo);
-        }
-        break;
-
-      case UserRole.CLIENTE:
-        const clientModules = await prisma.modulo.findMany();
-        allowedModules = clientModules.filter(m => {
-            try {
-                const userTypes = JSON.parse((m.tipouser as string) || '[]');
-                return Array.isArray(userTypes) && userTypes.includes(UserRole.CLIENTE);
-            } catch {
-                return false;
-            }
-        });
-        break;
-        
-      default:
-        allowedModules = [];
-        break;
-    }
 
     // Transform the full module objects into the desired ModuleLink shape, including the icon
     const moduleLinks: ModuleLink[] = allowedModules.map(m => ({

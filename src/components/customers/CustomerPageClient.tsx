@@ -7,9 +7,17 @@ import { Input } from "@/components/ui/input";
 import { CustomerTable } from "./CustomerTable";
 import { CustomerFormModal } from "./CustomerFormModal"; // Import the modal
 import { CustomerDetailsModal } from "./CustomerDetailsModal"; // Import the details modal
+import { ContactModal } from "./ContactModal"; // Import the contact modal
 import * as XLSX from 'xlsx';
-import { Download, RefreshCw } from "lucide-react";
+import { Download, RefreshCw, Filter } from "lucide-react";
 import { Spinner } from "@/components/ui/spinner";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -51,6 +59,7 @@ export interface Customer {
   email_user_masiva_whatsapp?: string;
   settings?: any;
   is_agente_retencion?: boolean;
+  porcent_retencion_iva?: any;
   porcent_retencion_islr?: any;
   porcent_retencion_municipio?: any;
   user_id?: string;
@@ -64,11 +73,15 @@ export default function CustomerPageClient() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState("");
+  const [taxTypeFilter, setTaxTypeFilter] = useState<string>("ALL");
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [selectedCustomer, setSelectedCustomer] = useState<Customer | undefined>(undefined);
   const [isDetailsModalOpen, setIsDetailsModalOpen] = useState(false);
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
   const [customerToDeleteId, setCustomerToDeleteId] = useState<string | null>(null);
+  const [contactModalOpen, setContactModalOpen] = useState(false);
+  const [contactChannel, setContactChannel] = useState<"SMS" | "WHATSAPP" | "EMAIL">("SMS");
+  const [contactCustomer, setContactCustomer] = useState<Customer | undefined>(undefined);
 
   const fetchCustomers = async () => {
     setLoading(true);
@@ -105,11 +118,21 @@ export default function CustomerPageClient() {
     } catch (e) { console.error("Error cargando catálogo:", e); }
   };
 
-  const filteredCustomers = customers.filter((customer: Customer) =>
-    (customer.name && customer.name.toLowerCase().includes(searchTerm.toLowerCase())) ||
-    (customer.doc_number && customer.doc_number.toLowerCase().includes(searchTerm.toLowerCase())) ||
-    (customer.email && customer.email.toLowerCase().includes(searchTerm.toLowerCase()))
-  );
+  const filteredCustomers = customers.filter((customer: Customer) => {
+    const matchesSearch =
+      (customer.name && customer.name.toLowerCase().includes(searchTerm.toLowerCase())) ||
+      (customer.doc_number && customer.doc_number.toLowerCase().includes(searchTerm.toLowerCase())) ||
+      (customer.email && customer.email.toLowerCase().includes(searchTerm.toLowerCase()));
+
+    if (!matchesSearch) return false;
+
+    if (taxTypeFilter !== "ALL") {
+      const effectiveTaxType = customer.settings?.taxType || "ORDINARY";
+      return effectiveTaxType === taxTypeFilter;
+    }
+
+    return true;
+  });
 
   const handleCreateCustomer = () => {
     setSelectedCustomer(undefined);
@@ -126,6 +149,12 @@ export default function CustomerPageClient() {
     setIsDetailsModalOpen(true);
   };
 
+  const handleContact = (customer: Customer, channel: "SMS" | "WHATSAPP" | "EMAIL") => {
+    setContactCustomer(customer);
+    setContactChannel(channel);
+    setContactModalOpen(true);
+  };
+
   const handleCloseModal = () => {
     setIsModalOpen(false);
     setIsDetailsModalOpen(false);
@@ -133,9 +162,9 @@ export default function CustomerPageClient() {
   };
 
   const handleExportExcel = () => {
-    if (customers.length === 0) return;
+    if (filteredCustomers.length === 0) return;
 
-    const dataToExport = customers.map(customer => {
+    const dataToExport = filteredCustomers.map(customer => {
       const servicios = (customer.servicios_contratados || []).map((s: any) => {
         const isManual = s[2];
         const precioUsd = s[4] || 0;
@@ -162,7 +191,7 @@ export default function CustomerPageClient() {
         'Email Cobranza': customer.persona_cobranza_info?.email || 'N/A',
         'Ciudad': customer.ciudad || 'N/A',
         'Estado': customer.status === 'ACTIVE' ? 'Activo' : 'Inactivo',
-        'Tipo Contribuyente': customer.settings?.taxType === 'ORDINARY' ? 'Ordinario' : 'Especial',
+        'Tipo Contribuyente': customer.settings?.taxType === 'SPECIAL' ? 'Especial' : 'Ordinario',
         'Servicios Contratados': servicios
       };
     });
@@ -212,13 +241,28 @@ export default function CustomerPageClient() {
         <h1 className="text-3xl font-bold">Gestión de Clientes</h1>
       </div>
 
-      <div className="flex items-center justify-between mb-4">
-        <Input
-          placeholder="Buscar clientes..."
-          value={searchTerm}
-          onChange={(e) => setSearchTerm(e.target.value)}
-          className="max-w-sm"
-        />
+      <div className="flex flex-col md:flex-row items-center justify-between gap-3 mb-4">
+        <div className="flex items-center gap-3 w-full md:w-auto">
+          <Input
+            placeholder="Buscar clientes..."
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            className="max-w-sm w-full"
+          />
+          <Select value={taxTypeFilter} onValueChange={setTaxTypeFilter}>
+            <SelectTrigger className="w-full md:w-[200px]">
+              <div className="flex items-center gap-2">
+                <Filter className="h-4 w-4 text-slate-400" />
+                <SelectValue placeholder="Tipo Contribuyente" />
+              </div>
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="ALL">Todos</SelectItem>
+              <SelectItem value="ORDINARY">Ordinario</SelectItem>
+              <SelectItem value="SPECIAL">Especial</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
         <div className="flex space-x-2">
           <Button 
             onClick={handleExportExcel} 
@@ -246,6 +290,7 @@ export default function CustomerPageClient() {
           onEdit={handleEditCustomer}
           onDelete={handleDeleteCustomer}
           onViewDetails={handleViewDetails}
+          onContact={handleContact}
         />
       )}
 
@@ -261,6 +306,19 @@ export default function CustomerPageClient() {
         onClose={handleCloseModal}
         customer={selectedCustomer}
       />
+
+      {contactCustomer && (
+        <ContactModal
+          isOpen={contactModalOpen}
+          onClose={() => {
+            setContactModalOpen(false);
+            setContactCustomer(undefined);
+          }}
+          entity={contactCustomer}
+          channel={contactChannel}
+          onSuccess={fetchCustomers}
+        />
+      )}
 
       <AlertDialog open={isDeleteModalOpen} onOpenChange={setIsDeleteModalOpen}>
         <AlertDialogContent>

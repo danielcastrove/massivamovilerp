@@ -26,9 +26,9 @@ const representanteLegalSchema = z.object({
     errorMap: () => ({ message: "El prefijo de cédula es obligatorio." }),
   }).default("V"),
   cedulaNumber: z.string().min(1, { message: "El número de cédula es obligatorio." }),
-  telefonoPrefix: z.literal("+58").default("+58"), // Auto-filled and disabled in UI
-  telefonoNumber: z.string().min(1, { message: "El número de teléfono es obligatorio." }),
-  cargo: z.string().min(1, { message: "El cargo es obligatorio." }),
+  // telefonoPrefix: z.literal("+58").default("+58"), // Auto-filled and disabled in UI
+  // telefonoNumber: z.string().min(1, { message: "El número de teléfono es obligatorio." }),
+  // cargo: z.string().min(1, { message: "El cargo es obligatorio." }),
 });
 
 
@@ -97,9 +97,18 @@ export const customerFormSchema = z.object({
   }).optional(),
   isTaxExempt: z.boolean().default(false),
   is_agente_retencion: z.boolean().default(false),
-  porcent_retencion_iva: z.preprocess((val) => (val === "" ? null : val), z.number().min(0).max(100).nullable().optional()),
-  porcent_retencion_islr: z.preprocess((val) => (val === "" ? null : val), z.number().min(0).max(100).nullable().optional()),
-  porcent_retencion_municipio: z.preprocess((val) => (val === "" ? null : val), z.number().min(0).max(100).nullable().optional()),
+  porcent_retencion_iva: z.preprocess((val) => {
+    if (val === "" || val === null || val === undefined) return null;
+    return typeof val === "string" ? Number(val) : val;
+  }, z.number().min(0).max(100).nullable().optional()),
+  porcent_retencion_islr: z.preprocess((val) => {
+    if (val === "" || val === null || val === undefined) return null;
+    return typeof val === "string" ? Number(val) : val;
+  }, z.number().min(0).max(100).nullable().optional()),
+  porcent_retencion_municipio: z.preprocess((val) => {
+    if (val === "" || val === null || val === undefined) return null;
+    return typeof val === "string" ? Number(val) : val;
+  }, z.number().min(0).max(100).nullable().optional()),
   fiscalAddress: z.string().optional().nullable(),
 
   // Step 7: Rep. Legal
@@ -209,7 +218,7 @@ export const customerFormSchema = z.object({
 });
 
 // Transform the schema to map client-side names to server-side names
-export const formatPhoneNumberForSupabase = (phoneNumber: string | undefined): string | undefined => {
+export const formatPhoneNumberForSupabase = (phoneNumber: string | null | undefined): string | null | undefined => {
   if (!phoneNumber) return phoneNumber;
 
   let cleanedNumber = phoneNumber.replace(/\D/g, '');
@@ -256,7 +265,7 @@ export const customerFormSchemaTransformed = customerFormSchema.transform((data)
     },
     representante_legal_info: {
       ...data.representante_legal_info,
-      telefono_celular: formatPhoneNumberForSupabase(data.representante_legal_info.telefonoNumber),
+      // telefono_celular: formatPhoneNumberForSupabase(data.representante_legal_info.telefonoNumber),
     },
   };
 

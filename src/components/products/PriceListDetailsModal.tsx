@@ -22,6 +22,7 @@ import {
 import { Loader, AlertCircle, Download } from "lucide-react"; // Import Download icon
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button"; // Import Button
+import { DataPagination } from "@/components/ui/data-pagination";
 
 interface ProductPriceDetail {
     product_id: string;
@@ -49,6 +50,8 @@ interface PriceListDetailsModalProps {
   onClose: () => void;
 }
 
+const ITEMS_PER_PAGE = 20;
+
 export function PriceListDetailsModal({
   priceListId,
   priceListName,
@@ -58,6 +61,11 @@ export function PriceListDetailsModal({
   const [productPrices, setProductPrices] = React.useState<ProductPriceDetail[]>([]);
   const [isLoading, setIsLoading] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
+  const [currentPage, setCurrentPage] = React.useState(1);
+
+  React.useEffect(() => {
+    if (isOpen) setCurrentPage(1);
+  }, [isOpen]);
 
   React.useEffect(() => {
     if (!isOpen || !priceListId) {
@@ -89,6 +97,11 @@ export function PriceListDetailsModal({
 
     fetchDetails();
   }, [isOpen, priceListId]);
+
+  const paginatedData = React.useMemo(() => {
+    const start = (currentPage - 1) * ITEMS_PER_PAGE;
+    return productPrices.slice(start, start + ITEMS_PER_PAGE);
+  }, [productPrices, currentPage]);
 
   const handleExport = () => {
     if (!productPrices || productPrices.length === 0) {
@@ -150,38 +163,48 @@ export function PriceListDetailsModal({
         )}
 
         {productPrices && !isLoading && !error && (
-          <div className="max-h-[400px] overflow-y-auto">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>SKU</TableHead>
-                  <TableHead>Producto</TableHead>
-                  <TableHead>Categoría</TableHead>
-                  <TableHead>Precio (USD)</TableHead>
-                  <TableHead className="text-right">Precio Aprox. (Bs)</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {productPrices.length === 0 ? (
+          <>
+            <div className="max-h-[400px] overflow-y-auto">
+              <Table>
+                <TableHeader>
                   <TableRow>
-                    <TableCell colSpan={5} className="text-center text-muted-foreground">
-                      No hay productos asignados a esta lista de precios.
-                    </TableCell>
+                    <TableHead>SKU</TableHead>
+                    <TableHead>Producto</TableHead>
+                    <TableHead>Categoría</TableHead>
+                    <TableHead>Precio (USD)</TableHead>
+                    <TableHead className="text-right">Precio Aprox. (Bs)</TableHead>
                   </TableRow>
-                ) : (
-                  productPrices.map((item) => (
-                    <TableRow key={item.product_id}>
-                      <TableCell className="font-mono text-xs font-bold text-cyan-600">{item.product.sku || 'N/A'}</TableCell>
-                      <TableCell className="font-medium">{item.product.name}</TableCell>
-                      <TableCell>{item.product.category?.name || 'N/A'}</TableCell>
-                      <TableCell>${Number(item.price_usd).toFixed(2)}</TableCell>
-                      <TableCell className="text-right">{formatCurrency(item.approx_price_bs)}</TableCell>
+                </TableHeader>
+                <TableBody>
+                  {paginatedData.length === 0 ? (
+                    <TableRow>
+                      <TableCell colSpan={5} className="text-center text-muted-foreground">
+                        No hay productos asignados a esta lista de precios.
+                      </TableCell>
                     </TableRow>
-                  ))
-                )}
-              </TableBody>
-            </Table>
-          </div>
+                  ) : (
+                    paginatedData.map((item) => (
+                      <TableRow key={item.product_id}>
+                        <TableCell className="font-mono text-xs font-bold text-cyan-600">{item.product.sku || 'N/A'}</TableCell>
+                        <TableCell className="font-medium">{item.product.name}</TableCell>
+                        <TableCell>{item.product.category?.name || 'N/A'}</TableCell>
+                        <TableCell>${Number(item.price_usd).toFixed(2)}</TableCell>
+                        <TableCell className="text-right">{formatCurrency(item.approx_price_bs)}</TableCell>
+                      </TableRow>
+                    ))
+                  )}
+                </TableBody>
+              </Table>
+            </div>
+            {productPrices.length > ITEMS_PER_PAGE && (
+              <DataPagination
+                currentPage={currentPage}
+                totalItems={productPrices.length}
+                itemsPerPage={ITEMS_PER_PAGE}
+                onPageChange={setCurrentPage}
+              />
+            )}
+          </>
         )}
       </DialogContent>
     </Dialog>

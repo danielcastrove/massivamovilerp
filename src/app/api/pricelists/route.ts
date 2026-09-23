@@ -6,12 +6,13 @@ const formSchema = z.object({
   name: z.string().min(2, {
     message: "El nombre debe tener al menos 2 caracteres.",
   }),
+  url: z.union([z.string().url("Ingresa una URL válida."), z.literal("")]).optional(),
 });
 
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
-    const { name } = formSchema.parse(body);
+    const { name, url } = formSchema.parse(body);
 
     // Check if a price list with the same name already exists
     const existingPriceList = await prisma.priceList.findUnique({
@@ -23,7 +24,7 @@ export async function POST(req: NextRequest) {
     }
 
     const newPriceList = await prisma.priceList.create({
-      data: { name },
+      data: { name, url: url || null },
     });
 
     return NextResponse.json(newPriceList, { status: 201 });

@@ -36,11 +36,10 @@ const generateSku = () => {
 };
 
 export function ServiceForm({ onSubmit, defaultValues, isSubmitting }: ServiceFormProps) {
-  const isEditing = !!defaultValues?.sku;
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
     defaultValues: defaultValues || { 
-      sku: generateSku(),
+      sku: "", 
       name: "", 
       type: "RECURRENT", 
       billing_cycle: "MONTHLY", 
@@ -98,7 +97,7 @@ export function ServiceForm({ onSubmit, defaultValues, isSubmitting }: ServiceFo
                 <FormControl>
                   <Input 
                     {...field} 
-                    placeholder="Ej: SMS-10K-PRO"
+                    placeholder="Escribe o genera un SKU"
                     className="font-mono font-bold text-cyan-700"
                   />
                 </FormControl>
@@ -109,7 +108,7 @@ export function ServiceForm({ onSubmit, defaultValues, isSubmitting }: ServiceFo
                   className="shrink-0"
                   title="Generar SKU automático"
                 >
-                  ✨ Generar
+                  Generar
                 </Button>
               </div>
               <FormMessage />

@@ -105,12 +105,13 @@ const styles = StyleSheet.create({
   },
   fieldLabel: {
     fontWeight: 'bold',
-    width: '30%',
+    width: '50%',
+    flexShrink: 0,
     fontSize: 7,
     color: '#666',
   },
   fieldValue: {
-    width: '70%',
+    width: '50%',
     fontSize: 8,
   },
 
@@ -281,6 +282,12 @@ const InvoicePDF = ({ invoice }: InvoicePDFProps) => {
   const currencyRate = Number(invoice.currency_rate);
   const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || 'https://massivamovilerp.vercel.app';
   
+  const formatDate = (d: any) => {
+    if (!d) return 'N/A';
+    const str = typeof d === 'string' ? d.replace(' ', 'T') : d;
+    return new Date(str).toLocaleDateString('es-VE');
+  };
+  
   return (
     <Document>
       <Page size="A4" style={styles.page}>
@@ -296,7 +303,10 @@ const InvoicePDF = ({ invoice }: InvoicePDFProps) => {
             <Text style={[styles.companyText, { marginTop: 15 }]}>Av. Principal de Las Mercedes, Edif. Centro Financiero,</Text>
             <Text style={styles.companyText}>Piso 5, Oficina 5-A. Caracas, Venezuela.</Text>
             <Text style={styles.companyText}>Teléfono: +58 (212) 123.45.67</Text>
-            <Text style={styles.companyText}>Email: administracion@massivamovil.com</Text>
+            <View style={{ flexDirection: 'row' }}>
+              <Text style={styles.companyText}>Email: </Text>
+              <Text style={styles.companyText}>administracion@massivamovil.com</Text>
+            </View>
             <Text style={styles.companyText}>Web: www.massivamovil.com</Text>
           </View>
 
@@ -325,11 +335,15 @@ const InvoicePDF = ({ invoice }: InvoicePDFProps) => {
               </View>
               <View style={styles.fieldRow}>
                 <Text style={styles.fieldLabel}>Emisión:</Text>
-                <Text style={styles.fieldValue}>{new Date(invoice.issue_date).toLocaleDateString('es-VE')}</Text>
+                <Text style={styles.fieldValue}>{formatDate(invoice.issue_date)}</Text>
               </View>
               <View style={styles.fieldRow}>
-                <Text style={styles.fieldLabel}>Vencimiento:</Text>
-                <Text style={styles.fieldValue}>{new Date(invoice.due_date).toLocaleDateString('es-VE')}</Text>
+                <Text style={styles.fieldLabel}>Venc. Servicio:</Text>
+                <Text style={styles.fieldValue}>{formatDate(invoice.due_date)}</Text>
+              </View>
+              <View style={styles.fieldRow}>
+                <Text style={styles.fieldLabel}>Venc. Factura:</Text>
+                <Text style={styles.fieldValue}>{formatDate(invoice.proximo_vencimiento_producto)}</Text>
               </View>
             </View>
           </View>
@@ -399,9 +413,11 @@ const InvoicePDF = ({ invoice }: InvoicePDFProps) => {
             <Text style={[styles.fieldLabel, { marginBottom: 5 }]}>Observaciones y Condiciones:</Text>
             <Text style={{ fontSize: 7, color: '#4b5563', lineHeight: 1.4 }}>
               {!isUsdOnly && `• El pago de esta factura debe realizarse en Bolívares a la tasa oficial del BCV vigente a la fecha de la transacción (Tasa del día: Bs. ${currencyRate.toFixed(4)}). \n`}
-              • El Pago de esta factura en una moneda distinta a la de curso legal y sin intermediación bancaria, genera un adicional de 3% sobre el monto pagado por concepto de IGTF. Según G.O Nro. 6.687 de fecha 25/02/2022.{"\n"}
-              • Favor reportar su comprobante de pago al correo: administracion@massivamovil.com
+              • El Pago de esta factura en una moneda distinta a la de curso legal y sin intermediación bancaria, genera un adicional de 3% sobre el 
             </Text>
+            <Text style={{ fontSize: 7, color: '#4b5563', lineHeight: 1.4 }}>monto pagado por concepto de IGTF. Según G.O Nro. 6.687 de fecha 25/02/2022.{"\n"}
+            • Favor reportar su comprobante de pago al correo:</Text>
+            <Text style={{ fontSize: 7, color: '#4b5563', lineHeight: 1.4 }}>administracion@massivamovil.com</Text>
           </View>
 
           <View style={styles.totalsBox}>

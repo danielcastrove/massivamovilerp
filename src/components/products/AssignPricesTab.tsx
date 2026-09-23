@@ -9,6 +9,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, Dialog
 import { Input } from "@/components/ui/input";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { DollarSign, AlertCircle, Loader, CheckCircle, PlusCircle, Trash2 } from 'lucide-react';
+import { DataPagination } from "@/components/ui/data-pagination";
 
 interface PriceList {
   id: string;
@@ -25,6 +26,8 @@ interface ProductPrice {
   price_usd: number;
 }
 
+const ITEMS_PER_PAGE = 20;
+
 export function AssignPricesTab() {
   const [selectedList, setSelectedList] = useState<string | null>(null);
   const [prices, setPrices] = useState<{ [productId: string]: number | string }>({});
@@ -37,6 +40,7 @@ export function AssignPricesTab() {
   const [isSaving, setIsSaving] = useState<boolean>(false);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [saveSuccess, setSaveSuccess] = useState<string | null>(null);
+  const [currentPage, setCurrentPage] = useState(1);
 
   // State for linking new products
   const [isLinkDialogOpen, setLinkDialogOpen] = useState(false);
@@ -100,12 +104,21 @@ export function AssignPricesTab() {
     fetchPrices();
   }, [selectedList]);
 
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [selectedList]);
+
   const { linkedProducts, unlinkedProducts } = useMemo(() => {
     const linkedIds = Object.keys(prices);
     const linked = allProducts.filter(p => linkedIds.includes(p.id));
     const unlinked = allProducts.filter(p => !linkedIds.includes(p.id));
     return { linkedProducts: linked, unlinkedProducts: unlinked };
   }, [allProducts, prices]);
+
+  const paginatedLinkedProducts = useMemo(() => {
+    const start = (currentPage - 1) * ITEMS_PER_PAGE;
+    return linkedProducts.slice(start, start + ITEMS_PER_PAGE);
+  }, [linkedProducts, currentPage]);
 
 
   const handlePriceChange = (productId: string, value: string) => {
@@ -245,10 +258,11 @@ export function AssignPricesTab() {
             </CardHeader>
             <CardContent>
               {loadingPrices ? <div className="flex justify-center h-40"><Loader className="h-8 w-8 animate-spin"/></div> : selectedList ? (
+                <>
                 <Table>
                   <TableHeader><TableRow><TableHead>Servicio</TableHead><TableHead>Precio (USD)</TableHead><TableHead className="text-right">Precio Aprox. (Bs)</TableHead><TableHead className="text-center">Acciones</TableHead></TableRow></TableHeader>
                   <TableBody>
-                    {linkedProducts.length > 0 ? linkedProducts.map((service) => (
+                    {linkedProducts.length > 0 ? paginatedLinkedProducts.map((service) => (
                       <TableRow key={service.id}>
                         <TableCell className="font-medium">{service.name}</TableCell>
                         <TableCell>
@@ -272,6 +286,15 @@ export function AssignPricesTab() {
                     )}
                   </TableBody>
                 </Table>
+                {linkedProducts.length > ITEMS_PER_PAGE && (
+                  <DataPagination
+                    currentPage={currentPage}
+                    totalItems={linkedProducts.length}
+                    itemsPerPage={ITEMS_PER_PAGE}
+                    onPageChange={setCurrentPage}
+                  />
+                )}
+                </>
               ) : <div className="text-center h-40 content-center text-sm text-muted-foreground">Selecciona una lista de precios.</div>}
             </CardContent>
             {selectedList && linkedProducts.length > 0 && (

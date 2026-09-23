@@ -39,9 +39,10 @@ import { Label } from "@/components/ui/label";
 const leadFormSchema = z.object({
   nombre: z.string().min(1, "Nombre requerido"),
   apellido: z.string().min(1, "Apellido requerido"),
+  nombre_empresa: z.string().optional(),
   cedula: z.string().optional().or(z.literal("")),
-  email: z.string().email("Email inválido").optional().or(z.literal("")),
-  telefono: z.string().optional(),
+  email: z.string().min(1, "Email requerido").email("Email inválido"),
+  telefono: z.string().min(1, "Teléfono requerido"),
   productId: z.string().optional().nullable(),
   priceListId: z.string().optional().nullable(),
   custom_product: z.string().optional().nullable(),
@@ -74,6 +75,7 @@ export function LeadFormModal({ isOpen, onClose, onSuccess, lead, readOnly = fal
     defaultValues: {
       nombre: "",
       apellido: "",
+      nombre_empresa: "",
       cedula: "",
       email: "",
       telefono: "",
@@ -103,6 +105,7 @@ export function LeadFormModal({ isOpen, onClose, onSuccess, lead, readOnly = fal
       form.reset({
         nombre: "",
         apellido: "",
+        nombre_empresa: "",
         cedula: "",
         email: "",
         telefono: "",
@@ -216,20 +219,8 @@ export function LeadFormModal({ isOpen, onClose, onSuccess, lead, readOnly = fal
                 <User className="h-4 w-4" /> Información de Contacto
               </h3>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <FormField control={form.control} name="nombre" render={({ field }) => (
-                  <FormItem><FormLabel>Nombre</FormLabel><FormControl><Input placeholder="Ej: Juan" {...field} disabled={readOnly} /></FormControl><FormMessage /></FormItem>
-                )} />
-                <FormField control={form.control} name="apellido" render={({ field }) => (
-                  <FormItem><FormLabel>Apellido</FormLabel><FormControl><Input placeholder="Ej: Pérez" {...field} disabled={readOnly} /></FormControl><FormMessage /></FormItem>
-                )} />
-                <FormField control={form.control} name="email" render={({ field }) => (
-                  <FormItem><FormLabel>Email</FormLabel><FormControl><Input placeholder="juan@correo.com" {...field} value={field.value || ""} disabled={readOnly} /></FormControl><FormMessage /></FormItem>
-                )} />
-                <FormField control={form.control} name="telefono" render={({ field }) => (
-                  <FormItem><FormLabel>Teléfono</FormLabel><FormControl><Input placeholder="+58 412..." {...field} value={field.value || ""} disabled={readOnly} /></FormControl><FormMessage /></FormItem>
-                )} />
-                <FormField control={form.control} name="cedula" render={({ field }) => (
-                  <FormItem><FormLabel>Cédula/RIF</FormLabel><FormControl><Input placeholder="V-12345678" {...field} value={field.value || ""} disabled={readOnly} /></FormControl><FormMessage /></FormItem>
+                <FormField control={form.control} name="nombre_empresa" render={({ field }) => (
+                  <FormItem><FormLabel>Nombre de la Empresa</FormLabel><FormControl><Input placeholder="Ej: Empresa C.A." {...field} disabled={readOnly} /></FormControl><FormMessage /></FormItem>
                 )} />
                 <FormField control={form.control} name="tipo_lead" render={({ field }) => (
                   <FormItem>
@@ -242,6 +233,21 @@ export function LeadFormModal({ isOpen, onClose, onSuccess, lead, readOnly = fal
                       </SelectContent>
                     </Select>
                   </FormItem>
+                )} />
+                <FormField control={form.control} name="nombre" render={({ field }) => (
+                  <FormItem><FormLabel>Nombre <span className="text-red-500">*</span></FormLabel><FormControl><Input placeholder="Ej: Juan" {...field} disabled={readOnly} /></FormControl><FormMessage /></FormItem>
+                )} />
+                <FormField control={form.control} name="apellido" render={({ field }) => (
+                  <FormItem><FormLabel>Apellido <span className="text-red-500">*</span></FormLabel><FormControl><Input placeholder="Ej: Pérez" {...field} disabled={readOnly} /></FormControl><FormMessage /></FormItem>
+                )} />
+                <FormField control={form.control} name="email" render={({ field }) => (
+                  <FormItem><FormLabel>Email <span className="text-red-500">*</span></FormLabel><FormControl><Input placeholder="juan@correo.com" {...field} value={field.value || ""} disabled={readOnly} /></FormControl><FormMessage /></FormItem>
+                )} />
+                <FormField control={form.control} name="telefono" render={({ field }) => (
+                  <FormItem><FormLabel>Teléfono <span className="text-red-500">*</span></FormLabel><FormControl><Input placeholder="+58 412..." {...field} value={field.value || ""} disabled={readOnly} /></FormControl><FormMessage /></FormItem>
+                )} />
+                <FormField control={form.control} name="cedula" render={({ field }) => (
+                  <FormItem><FormLabel>Cédula/RIF</FormLabel><FormControl><Input placeholder="V-12345678" {...field} value={field.value || ""} disabled={readOnly} /></FormControl><FormMessage /></FormItem>
                 )} />
               </div>
             </div>

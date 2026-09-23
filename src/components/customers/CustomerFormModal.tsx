@@ -97,6 +97,11 @@ export function CustomerFormModal({ isOpen, onClose, onSuccess, customer }: Cust
   const isTaxExempt = form.watch("isTaxExempt");
 
   const [isFiscalAddressAuto, setIsFiscalAddressAuto] = useState(true);
+  const [isLastStepValidated, setIsLastStepValidated] = useState(false);
+
+  useEffect(() => {
+    if (step === 0) setIsLastStepValidated(false);
+  }, [step]);
 
   // DEBUG: Monitor validation errors
   useEffect(() => {
@@ -112,10 +117,13 @@ export function CustomerFormModal({ isOpen, onClose, onSuccess, customer }: Cust
   }, [taxType, isTaxExempt, form]);
 
   useEffect(() => {
-    if (isFiscalAddressAuto && address !== fiscalAddress) {
-      form.setValue("fiscalAddress", address || "");
+    if (isFiscalAddressAuto) {
+      const newFiscal = address || "";
+      if (form.getValues("fiscalAddress") !== newFiscal) {
+        form.setValue("fiscalAddress", newFiscal);
+      }
     }
-  }, [address, isFiscalAddressAuto, form, fiscalAddress]);
+  }, [address, isFiscalAddressAuto, form]);
 
   useEffect(() => {
     if (customer) {
@@ -219,6 +227,8 @@ export function CustomerFormModal({ isOpen, onClose, onSuccess, customer }: Cust
           taxType: "ORDINARY",
           isTaxExempt: false,
           sameAsContact: false,
+          address: "",
+          fiscalAddress: "",
           services: [],
           representante_legal_info: {
             cedulaPrefix: "V" as any,
@@ -249,7 +259,7 @@ export function CustomerFormModal({ isOpen, onClose, onSuccess, customer }: Cust
 
   const stepTitles = isEditing 
     ? allStepTitles.filter(t => t !== 'Usuario')
-    : allStepTitles.filter(t => t !== 'Datos de Reseteo');
+    : allStepTitles;
 
   const totalSteps = stepTitles.length - 1;
 
@@ -264,9 +274,9 @@ export function CustomerFormModal({ isOpen, onClose, onSuccess, customer }: Cust
       case 'Datos Persona Cobranza': return !sameAsContact ? ["persona_cobranza_info.nombre", "persona_cobranza_info.email", "persona_cobranza_info.telefono", "persona_cobranza_info.cargo"] : [];
       case 'Documento Constitutivo': return ["documento_constitutivo_info.nombre_registro", "documento_constitutivo_info.fecha_registro", "documento_constitutivo_info.nro_tomo"];
       case 'Impuestos': return ["taxType", "fiscalAddress", "is_agente_retencion", "porcent_retencion_iva", "porcent_retencion_islr", "porcent_retencion_municipio"];
-      case 'Rep. Legal': return ["representante_legal_info.nombre", "representante_legal_info.email", "representante_legal_info.cedulaNumber", "representante_legal_info.telefonoNumber"];
+      case 'Rep. Legal': return ["representante_legal_info.nombre", "representante_legal_info.email", "representante_legal_info.cedulaNumber"];
       case 'Suscripción': return ["services"];
-      case 'Datos de Reseteo': return ["reseteado_sms", "fecha_reseteado", "cantidad_sms_antes_reset", "recurrencia_compra_SMS", "recurrencia_compra_whatsapp"];
+      case 'Datos de Reseteo': return isEditing ? ["reseteado_sms", "fecha_reseteado", "cantidad_sms_antes_reset", "recurrencia_compra_SMS", "recurrencia_compra_whatsapp"] : ["recurrencia_compra_SMS", "recurrencia_compra_whatsapp"];
       default: return [];
     }
   };
@@ -276,7 +286,12 @@ export function CustomerFormModal({ isOpen, onClose, onSuccess, customer }: Cust
     const isValid = await form.trigger(fieldsToValidate as any);
 
     if (isValid) {
-      setStep((prev) => (prev < totalSteps ? prev + 1 : prev));
+      if (step === totalSteps) {
+        setIsLastStepValidated(true);
+      } else {
+        setIsLastStepValidated(false);
+        setStep((prev) => prev + 1);
+      }
       setSubmissionStatus(null);
     } else {
       const errorMessages: string[] = ["Revise los campos obligatorios del paso actual."];
@@ -287,12 +302,12 @@ export function CustomerFormModal({ isOpen, onClose, onSuccess, customer }: Cust
   const onSubmit = async (values: CustomerFormValues) => {
     setLoading(true);
     try {
-      // Limpieza manual de campos que pueden venir como string vacío "" desde el input type="number"
+      // Limpieza manual de campos que pueden venir como string desde el input type="number"
       const sanitizedValues = {
         ...values,
-        porcent_retencion_iva: values.porcent_retencion_iva === ("" as any) ? null : values.porcent_retencion_iva,
-        porcent_retencion_islr: values.porcent_retencion_islr === ("" as any) ? null : values.porcent_retencion_islr,
-        porcent_retencion_municipio: values.porcent_retencion_municipio === ("" as any) ? null : values.porcent_retencion_municipio,
+        porcent_retencion_iva: values.porcent_retencion_iva != null ? Number(values.porcent_retencion_iva) : null,
+        porcent_retencion_islr: values.porcent_retencion_islr != null ? Number(values.porcent_retencion_islr) : null,
+        porcent_retencion_municipio: values.porcent_retencion_municipio != null ? Number(values.porcent_retencion_municipio) : null,
       };
 
       const url = customer ? `/api/customers/${customer.id}` : "/api/customers";
@@ -458,6 +473,9 @@ export function CustomerFormModal({ isOpen, onClose, onSuccess, customer }: Cust
                                 <SelectItem value="CAMPAMENTOS">Campamentos</SelectItem>
                                 <SelectItem value="ENTRETENIMIENTO">Entretenimiento</SelectItem>
                                 <SelectItem value="CLUBES">Clubes</SelectItem>
+                                <SelectItem value="Eventos">Eventos</SelectItem>
+                                <SelectItem value="Legaltech">Legaltech</SelectItem>
+                                <SelectItem value="Fintech">Fintech</SelectItem>
                                 <SelectItem value="OTRO">Otro</SelectItem>
                               </SelectContent>
                             </Select>
@@ -646,7 +664,7 @@ export function CustomerFormModal({ isOpen, onClose, onSuccess, customer }: Cust
                       )}
 
                       <FormField name="fiscalAddress" control={form.control} render={({ field }) => (
-                        <FormItem><FormLabel>Dirección Fiscal</FormLabel><FormControl><Textarea {...field} value={field.value ?? ""} /></FormControl></FormItem>
+                        <FormItem><FormLabel>Dirección Fiscal</FormLabel><FormControl><Textarea {...field} value={field.value ?? ""} onFocus={() => setIsFiscalAddressAuto(false)} /></FormControl></FormItem>
                       )} />
                     </div>
                   )}
@@ -821,31 +839,33 @@ export function CustomerFormModal({ isOpen, onClose, onSuccess, customer }: Cust
 
                   {stepTitles[step] === 'Datos de Reseteo' && (
                     <div className="space-y-6">
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                        <FormField name="reseteado_sms" control={form.control} render={({ field }) => (
-                          <FormItem className="flex flex-row items-center space-x-3 rounded-md border p-4 bg-slate-50">
-                            <FormControl><Checkbox checked={field.value} onCheckedChange={field.onChange} /></FormControl>
-                            <div className="space-y-1 leading-none">
-                              <FormLabel>¿Ha sido reseteado en SMS?</FormLabel>
-                              <p className="text-xs text-slate-500">Marcar si el cliente inició un nuevo ciclo.</p>
-                            </div>
-                          </FormItem>
-                        )} />
-                        <FormField name="fecha_reseteado" control={form.control} render={({ field }) => (
-                          <FormItem>
-                            <FormLabel>Fecha de Reseteo</FormLabel>
-                            <FormControl><Input type="date" {...field} value={field.value ?? ""} /></FormControl>
-                            <FormMessage />
-                          </FormItem>
-                        )} />
-                        <FormField name="cantidad_sms_antes_reset" control={form.control} render={({ field }) => (
-                          <FormItem>
-                            <FormLabel>Cantidad SMS Antes del Reseteo</FormLabel>
-                            <FormControl><Input type="number" placeholder="Ej: 5000" {...field} value={field.value ?? 0} onChange={e => field.onChange(Number(e.target.value))} /></FormControl>
-                            <FormMessage />
-                          </FormItem>
-                        )} />
-                      </div>
+                      {isEditing && (
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                          <FormField name="reseteado_sms" control={form.control} render={({ field }) => (
+                            <FormItem className="flex flex-row items-center space-x-3 rounded-md border p-4 bg-slate-50">
+                              <FormControl><Checkbox checked={field.value} onCheckedChange={field.onChange} /></FormControl>
+                              <div className="space-y-1 leading-none">
+                                <FormLabel>¿Ha sido reseteado en SMS?</FormLabel>
+                                <p className="text-xs text-slate-500">Marcar si el cliente inició un nuevo ciclo.</p>
+                              </div>
+                            </FormItem>
+                          )} />
+                          <FormField name="fecha_reseteado" control={form.control} render={({ field }) => (
+                            <FormItem>
+                              <FormLabel>Fecha de Reseteo</FormLabel>
+                              <FormControl><Input type="date" {...field} value={field.value ?? ""} /></FormControl>
+                              <FormMessage />
+                            </FormItem>
+                          )} />
+                          <FormField name="cantidad_sms_antes_reset" control={form.control} render={({ field }) => (
+                            <FormItem>
+                              <FormLabel>Cantidad SMS Antes del Reseteo</FormLabel>
+                              <FormControl><Input type="number" placeholder="Ej: 5000" {...field} value={field.value ?? 0} onChange={e => field.onChange(Number(e.target.value))} /></FormControl>
+                              <FormMessage />
+                            </FormItem>
+                          )} />
+                        </div>
+                      )}
                       
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pt-4 border-t">
                         <FormField name="recurrencia_compra_SMS" control={form.control} render={({ field }) => (
@@ -887,7 +907,7 @@ export function CustomerFormModal({ isOpen, onClose, onSuccess, customer }: Cust
 
             <DialogFooter className="p-6 pt-2 border-t bg-slate-50">
               <div className="flex justify-between items-center w-full">
-                <Button type="button" variant="ghost" onClick={() => setStep(s => s - 1)} disabled={step === 0 || loading}>
+                <Button type="button" variant="ghost" onClick={() => { setStep(s => s - 1); setIsLastStepValidated(false); }} disabled={step === 0 || loading}>
                   Anterior
                 </Button>
 
@@ -897,7 +917,7 @@ export function CustomerFormModal({ isOpen, onClose, onSuccess, customer }: Cust
                       <button 
                         key={i}
                         type="button"
-                        onClick={() => setStep(i)}
+                        onClick={() => { setStep(i); setIsLastStepValidated(false); }}
                         className={`w-2 h-2 rounded-full transition-all duration-200 hover:scale-150 ${
                           i === step ? "bg-cyan-600 scale-125 shadow-[0_0_8px_rgba(8,145,178,0.5)]" : "bg-slate-300 hover:bg-cyan-300"
                         }`}
@@ -909,8 +929,10 @@ export function CustomerFormModal({ isOpen, onClose, onSuccess, customer }: Cust
 
                 <div className="flex gap-2">
                   <Button type="button" variant="outline" onClick={onClose} disabled={loading}>Cancelar</Button>
-                  {step < totalSteps ? (
-                    <Button type="button" onClick={handleNextStep} className="bg-cyan-600 text-white">Siguiente</Button>
+                  {step < totalSteps || !isLastStepValidated ? (
+                    <Button type="button" onClick={handleNextStep} className="bg-cyan-600 text-white">
+                      {step === totalSteps ? "Validar" : "Siguiente"}
+                    </Button>
                   ) : (
                     <Button type="submit" disabled={loading} className="bg-cyan-600 text-white min-w-[120px]">
                       {loading ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : (customer ? "Actualizar" : "Guardar Cliente")}

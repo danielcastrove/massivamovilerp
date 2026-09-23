@@ -1,7 +1,7 @@
 "use client";
 
 import { useSession, signOut } from "next-auth/react";
-import { Home, DollarSign, Users, Settings, LogOut, Package2, ShoppingCart, ShieldCheck, LayoutGrid, Receipt, UserPlus, Coins, type LucideIcon } from "lucide-react";
+import { Home, DollarSign, Users, Settings, LogOut, Package2, ShoppingCart, ShieldCheck, LayoutGrid, Receipt, UserPlus, Coins, Key, type LucideIcon } from "lucide-react";
 import Link from 'next/link';
 import { useSidebarStore } from "@/stores/useSidebarStore";
 import { usePathname } from "next/navigation";
@@ -28,7 +28,8 @@ const iconMap: { [key: string]: LucideIcon } = {
   LayoutGrid: LayoutGrid,
   Receipt: Receipt,
   UserPlus: UserPlus,
-  Coins: Coins
+  Coins: Coins,
+  Key: Key
 };
 
 const DefaultIcon = Package2;
@@ -41,16 +42,19 @@ const ORDER_PRIORITY = [
   "Facturación",
   "Productos",
   "Cobranza",
-  "Portal Cliente",
-  "Seguridad y Roles",
+  "Gestión de Usuarios",
+  "Gestor de API Key",
   "Configuración"
 ];
+
+// Module names to hide from the sidebar (not yet implemented)
+const HIDDEN_MODULE_NAMES = ["Portal de Cliente", "Seguridad y Roles"];
 
 // These links are always present and are not controlled by the database
 const staticNavLinks: { href: string; label: string; icon: LucideIcon }[] = [];
 
 const staticNavLinksEnds = [
-  { href: "/settings", label: "Configuración", icon: Settings },
+  { href: "/dashboard/settings", label: "Configuración", icon: Settings },
 ];
 
 export function Sidebar() {
@@ -90,7 +94,7 @@ export function Sidebar() {
           }));
 
           const staticModulePaths = [...staticNavLinks, ...staticNavLinksEnds].map(l => l.href);
-          const filteredModules = cleanedModules.filter(m => !staticModulePaths.includes(m.path));
+          const filteredModules = cleanedModules.filter(m => !staticModulePaths.includes(m.path) && !HIDDEN_MODULE_NAMES.includes(m.name));
 
           // Sort based on ORDER_PRIORITY
           filteredModules.sort((a, b) => {
@@ -218,17 +222,17 @@ export function Sidebar() {
             </nav>
           </div>
           <div className="mt-auto p-2 border-t">
-            <Button 
-              variant="ghost" 
+            <Button
+              variant="ghost"
               className={cn(
                 "w-full transition-all text-slate-600 hover:text-red-600 hover:bg-red-50",
                 isCollapsed ? "justify-center px-0" : "justify-start px-3"
-              )} 
+              )}
               onClick={() => signOut()}
-              title={isCollapsed ? "Cerrar Sesión" : ""}
+              title={isCollapsed ? "Cerrar sesión" : ""}
             >
               <LogOut className="h-5 w-5 shrink-0" />
-              {!isCollapsed && <span className="ml-3 truncate font-medium">Cerrar Sesión</span>}
+              {!isCollapsed && <span className="ml-3 truncate font-medium">Cerrar sesión</span>}
             </Button>
           </div>
         </div>

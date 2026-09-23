@@ -132,6 +132,10 @@ export const LeadPdfTemplate: React.FC<LeadPdfTemplateProps> = ({ lead }) => {
             <Text style={styles.value}>{lead.nombre} {lead.apellido}</Text>
           </View>
           <View style={styles.row}>
+            <Text style={styles.label}>Empresa:</Text>
+            <Text style={styles.value}>{lead.nombre_empresa || 'No especificada'}</Text>
+          </View>
+          <View style={styles.row}>
             <Text style={styles.label}>Cédula / RIF:</Text>
             <Text style={styles.value}>{lead.cedula || 'No especificado'}</Text>
           </View>

@@ -6,6 +6,7 @@ const formSchema = z.object({
   name: z.string().min(2, {
     message: "El nombre debe tener al menos 2 caracteres.",
   }),
+  url: z.union([z.string().url("Ingresa una URL válida."), z.literal("")]).optional(),
 });
 
 export async function PUT(
@@ -19,7 +20,7 @@ export async function PUT(
     }
 
     const body = await req.json();
-    const { name } = formSchema.parse(body);
+    const { name, url } = formSchema.parse(body);
 
     // Check if a price list with the same name already exists, excluding the current one
     const existingPriceList = await prisma.priceList.findFirst({
@@ -35,7 +36,7 @@ export async function PUT(
 
     const updatedPriceList = await prisma.priceList.update({
       where: { id: id },
-      data: { name },
+      data: { name, url: url || null },
     });
 
     return NextResponse.json(updatedPriceList, { status: 200 });
@@ -64,12 +65,6 @@ export async function DELETE(
       // 1. Borrar todos los precios específicos de productos vinculados a esta lista
       await tx.productPrice.deleteMany({
         where: { price_list_id: id },
-      });
-
-      // 2. Desvincular la lista de los Clientes (poner a null)
-      await tx.customer.updateMany({
-        where: { price_list_id: id },
-        data: { price_list_id: null },
       });
 
       // 3. Desvincular la lista de los Leads (poner a null)

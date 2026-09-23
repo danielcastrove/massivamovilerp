@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { auth } from "@/lib/auth";
+import { withApiKeyAuth } from "@/lib/apikey-guard";
 import { Prisma } from "@prisma/client";
 import { sendPaymentConfirmation } from "@/lib/notifications";
 
@@ -9,22 +10,26 @@ import { sendPaymentConfirmation } from "@/lib/notifications";
  * Opcionalmente puede recibir una lista de IDs de facturas para actualizar sus estados.
  */
 export async function POST(req: Request) {
+  return withApiKeyAuth(req, async (ctx) => {
   try {
-    const session = await auth();
-    if (!session || (session.user.role !== "MASSIVA_ADMIN" && session.user.role !== "MASSIVA_EXTRA")) {
-      return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
+    if (!ctx?.fromApiKey) {
+      const session = ctx?.session ?? await auth();
+      if (!session || (session.user.role !== "MASSIVA_ADMIN" && session.user.role !== "MASSIVA_EXTRA")) {
+        return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
+      }
     }
 
     const body = await req.json();
-    const { 
+    const {
       customerId,
-      amountPaid, 
-      currency, 
-      exchangeRate, 
-      paymentMethod, 
-      reference, 
-      evidenceUrl, 
-      paymentDate, 
+      type,
+      amountPaid,
+      currency,
+      exchangeRate,
+      paymentMethod,
+      reference,
+      evidenceUrl,
+      paymentDate,
       notes,
       appliedInvoiceIds // Opcional: Facturas que se están pagando
     } = body;
@@ -54,6 +59,7 @@ export async function POST(req: Request) {
       const newPayment = await tx.payment.create({
         data: {
           customer_id: customerId,
+          type: type || "FACTURA",
           amount_paid: new Prisma.Decimal(amountPaid),
           currency: currency || "USD",
           exchange_rate: new Prisma.Decimal(exchangeRate),
@@ -113,23 +119,72 @@ export async function POST(req: Request) {
     console.error("[PAYMENT_POST_ERROR]", error);
     return NextResponse.json({ message: error.message || "Error al registrar pago" }, { status: 500 });
   }
+  });
 }
 
 export async function GET(req: Request) {
+  return withApiKeyAuth(req, async (ctx) => {
     try {
-      const session = await auth();
-      if (!session) return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
+      if (!ctx?.fromApiKey) {
+        const session = ctx?.session ?? await auth();
+        if (!session) return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
+      }
   
-      const payments = await prisma.payment.findMany({
-        include: {
-          customer: { select: { name: true, doc_number: true } }
-        },
-        orderBy: { payment_date: "desc" },
-        take: 100
+      const now = new Date();
+      const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+      const sevenDaysLater = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
+  
+      const [payments, renewableInvoices] = await Promise.all([
+        prisma.payment.findMany({
+          include: {
+            customer: { select: { name: true, doc_number: true } }
+          },
+          orderBy: { payment_date: "desc" },
+          take: 100
+        }),
+        prisma.invoice.findMany({
+          where: {
+            status: "PAID",
+            proximo_vencimiento_producto: {
+              gte: sevenDaysAgo,
+              lte: sevenDaysLater,
+            },
+          },
+          select: {
+            id: true,
+            customer_id: true,
+            due_date: true,
+            proximo_vencimiento_producto: true,
+            total_usd: true,
+            invoice_number: true,
+          },
+        }),
+      ]);
+  
+      const customerIds: string[] = [
+        ...new Set(payments.map((p) => p.customer_id).filter((id): id is string => id !== null)),
+      ];
+      const customerSet = new Set(customerIds);
+      const renewableMap = new Map<string, (typeof renewableInvoices)[0]>();
+      for (const inv of renewableInvoices) {
+        if (!inv.customer_id || !customerSet.has(inv.customer_id)) continue;
+        if (!renewableMap.has(inv.customer_id)) {
+          renewableMap.set(inv.customer_id, inv);
+        }
+      }
+  
+      const paymentsWithRenewal = payments.map((pay) => {
+        const renewable = pay.customer_id ? renewableMap.get(pay.customer_id) : undefined;
+        return {
+          ...pay,
+          renewableInvoiceId: renewable?.id || null,
+          renewableInvoiceDueDate: renewable?.proximo_vencimiento_producto || renewable?.due_date || null,
+        };
       });
   
-      return NextResponse.json(payments);
+      return NextResponse.json(paymentsWithRenewal);
     } catch (error) {
       return NextResponse.json({ message: "Error al obtener pagos" }, { status: 500 });
     }
+  });
 }

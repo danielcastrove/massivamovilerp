@@ -20,6 +20,18 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
 
         const user = await prisma.user.findUnique({
           where: { email: credentials.email as string },
+          select: {
+            id: true,
+            email: true,
+            password_hash: true,
+            temp_password_hash: true,
+            temp_password_expires: true,
+            nombre: true,
+            apellido: true,
+            role: true,
+            is_active: true,
+            roles_id: true,
+          },
         });
 
         if (!user) {
@@ -37,6 +49,36 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
 
         if (isPasswordValid) {
           return user;
+        }
+
+        if (user.temp_password_hash && user.temp_password_expires) {
+          const isTempValid = await compare(
+            credentials.password as string,
+            user.temp_password_hash
+          ).catch(() => false);
+
+          if (isTempValid) {
+            if (new Date() > user.temp_password_expires) {
+              await prisma.user.update({
+                where: { id: user.id },
+                data: {
+                  temp_password_hash: null,
+                  temp_password_expires: null,
+                },
+              });
+              return null;
+            }
+
+            await prisma.user.update({
+              where: { id: user.id },
+              data: {
+                temp_password_hash: null,
+                temp_password_expires: null,
+              },
+            });
+
+            return user;
+          }
         }
 
         return null;

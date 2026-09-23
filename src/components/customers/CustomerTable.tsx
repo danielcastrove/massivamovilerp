@@ -1,6 +1,7 @@
 // massivamovilerp/src/components/customers/CustomerTable.tsx
 "use client";
 
+import { useState, useMemo, useEffect, useRef } from "react";
 import {
   Table,
   TableBody,
@@ -18,8 +19,9 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Button } from "@/components/ui/button";
-import { MoreHorizontal } from "lucide-react";
+import { MoreHorizontal, MessageSquare, Phone, Mail } from "lucide-react";
 import { Customer } from "./CustomerPageClient"; // Import the Customer interface
+import { DataPagination } from "@/components/ui/data-pagination";
 
 
 interface CustomerTableProps {
@@ -27,30 +29,49 @@ interface CustomerTableProps {
   onEdit: (customer: Customer) => void;
   onDelete: (customerId: string) => void;
   onViewDetails: (customer: Customer) => void;
+  onContact: (customer: Customer, channel: "SMS" | "WHATSAPP" | "EMAIL") => void;
 }
 
-export function CustomerTable({ customers, onEdit, onDelete, onViewDetails }: CustomerTableProps) {
+const ITEMS_PER_PAGE = 20;
+
+export function CustomerTable({ customers, onEdit, onDelete, onViewDetails, onContact }: CustomerTableProps) {
+  const [currentPage, setCurrentPage] = useState(1);
+  const prevCustomersLengthRef = useRef(customers.length);
+
+  useEffect(() => {
+    if (customers.length !== prevCustomersLengthRef.current) {
+      prevCustomersLengthRef.current = customers.length;
+      setCurrentPage(1); // eslint-disable-line react-hooks/set-state-in-effect -- Reset page when customer count changes
+    }
+  }, [customers.length]);
+
+  const paginatedCustomers = useMemo(() => {
+    const start = (currentPage - 1) * ITEMS_PER_PAGE;
+    return customers.slice(start, start + ITEMS_PER_PAGE);
+  }, [customers, currentPage]);
+
   return (
-    <Table>
-      <TableHeader>
-        <TableRow>
-          <TableHead>Razón Social</TableHead>
-          <TableHead>RIF/CI</TableHead>
-          <TableHead>Email</TableHead>
-          <TableHead>Teléfono</TableHead>
-          <TableHead>Tipo Contribuyente</TableHead>
-          <TableHead>Estado</TableHead>
-          <TableHead className="text-right">Acciones</TableHead>
-        </TableRow>
-      </TableHeader>
-      <TableBody>
-        {customers.map((customer) => (
+    <>
+      <Table>
+        <TableHeader>
+          <TableRow>
+            <TableHead>Razón Social</TableHead>
+            <TableHead>RIF/CI</TableHead>
+            <TableHead>Email</TableHead>
+            <TableHead>Teléfono</TableHead>
+            <TableHead>Tipo Contribuyente</TableHead>
+            <TableHead>Estado</TableHead>
+            <TableHead className="text-right">Acciones</TableHead>
+          </TableRow>
+        </TableHeader>
+        <TableBody>
+          {paginatedCustomers.map((customer) => (
           <TableRow key={customer.id}>
             <TableCell className="font-medium">{customer.name}</TableCell>
             <TableCell>{customer.doc_number}</TableCell>
             <TableCell>{customer.email}</TableCell>
             <TableCell>{customer.telefono_empresa}</TableCell>
-            <TableCell>{customer.settings?.taxType === 'ORDINARY' ? 'Ordinario' : 'Especial'}</TableCell>
+            <TableCell>{customer.settings?.taxType === 'SPECIAL' ? 'Especial' : 'Ordinario'}</TableCell>
             <TableCell>
               {customer.status === 'ACTIVE' ? (
                 <span className="text-green-600 font-bold bg-green-50 px-2 py-1 rounded text-[10px]">ACTIVO</span>
@@ -70,6 +91,16 @@ export function CustomerTable({ customers, onEdit, onDelete, onViewDetails }: Cu
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end">
                   <DropdownMenuLabel>Acciones</DropdownMenuLabel>
+                  <DropdownMenuItem onClick={() => onContact(customer, "SMS")}>
+                    <MessageSquare className="mr-2 h-4 w-4 text-blue-600" /> Enviar SMS
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => onContact(customer, "WHATSAPP")}>
+                    <Phone className="mr-2 h-4 w-4 text-emerald-600" /> Enviar WhatsApp
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => onContact(customer, "EMAIL")}>
+                    <Mail className="mr-2 h-4 w-4 text-violet-600" /> Enviar Email
+                  </DropdownMenuItem>
+                  <DropdownMenuSeparator />
                   <DropdownMenuItem onClick={() => onEdit(customer)}>
                     Editar
                   </DropdownMenuItem>
@@ -87,5 +118,14 @@ export function CustomerTable({ customers, onEdit, onDelete, onViewDetails }: Cu
         ))}
       </TableBody>
     </Table>
+      {customers.length > ITEMS_PER_PAGE && (
+        <DataPagination
+          currentPage={currentPage}
+          totalItems={customers.length}
+          itemsPerPage={ITEMS_PER_PAGE}
+          onPageChange={setCurrentPage}
+        />
+      )}
+    </>
   );
 }

@@ -44,7 +44,6 @@ async function verifyAssociationFlow() {
         type: "EMPRESA",
         direccion_fiscal: "Dirección de prueba",
         user: { connect: { id: orphanUser.id } },
-        priceList: { connect: { id: (await prisma.priceList.findFirst())?.id || "" } }
       }
     });
 

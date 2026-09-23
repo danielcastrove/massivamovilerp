@@ -6,6 +6,7 @@ import bcrypt from "bcryptjs";
 import { prisma } from "@/lib/db";
 import { customerFormSchemaTransformed } from "@/lib/validations/customer";
 import { auth } from '@/lib/auth';
+import { withApiKeyAuth } from '@/lib/apikey-guard';
 import { sendEmail } from "@/lib/email";
 
 function generateRandomPassword(length = 10) {
@@ -18,17 +19,19 @@ function generateRandomPassword(length = 10) {
 }
 
 export async function POST(req: Request) {
+  return withApiKeyAuth(req, async (ctx) => {
   try {
     const body = await req.json();
-    const session = await auth();
 
-    if (!session || !session.user) {
-      return NextResponse.json({ message: 'Unauthorized' }, { status: 401 });
-    }
-
-    const userRole = session.user.role;
-    if (userRole !== 'MASSIVA_ADMIN' && userRole !== 'MASSIVA_EXTRA') {
-      return NextResponse.json({ message: 'Forbidden: Insufficient role permissions.' }, { status: 403 });
+    if (!ctx?.fromApiKey) {
+      const session = ctx?.session ?? await auth();
+      if (!session || !session.user) {
+        return NextResponse.json({ message: 'Unauthorized' }, { status: 401 });
+      }
+      const userRole = session.user.role;
+      if (userRole !== 'MASSIVA_ADMIN' && userRole !== 'MASSIVA_EXTRA') {
+        return NextResponse.json({ message: 'Forbidden: Insufficient role permissions.' }, { status: 403 });
+      }
     }
     
     const validation = customerFormSchemaTransformed.safeParse(body);
@@ -177,31 +180,36 @@ export async function POST(req: Request) {
     }
     return NextResponse.json({ message: error.message || "Error interno." }, { status: 500 });
   }
+  });
 }
 
 export async function GET(request: Request) {
-  try {
-    const session = await auth();
-    if (!session || !session.user) return NextResponse.json({ message: 'Unauthorized' }, { status: 401 });
+  return withApiKeyAuth(request, async (ctx) => {
+    try {
+      const session = ctx?.fromApiKey ? null : (ctx?.session ?? await auth());
+      if (!ctx?.fromApiKey && (!session || !session.user)) {
+        return NextResponse.json({ message: 'Unauthorized' }, { status: 401 });
+      }
 
-    const userRole = session.user.role;
-    let customers;
+      const userRole = ctx?.fromApiKey ? 'MASSIVA_ADMIN' : session!.user.role;
+      let customers;
 
-    if (userRole === 'CLIENTE') {
-      customers = await prisma.customer.findUnique({
-        where: { user_id: session.user.id },
-        include: { user: true }
-      });
-    } else {
-      customers = await prisma.customer.findMany({
-        include: { 
-            user: { select: { id: true, email: true, nombre: true, apellido: true } }
-        },
-        orderBy: { created_at: 'desc' }
-      });
+      if (userRole === 'CLIENTE') {
+        customers = await prisma.customer.findUnique({
+          where: { user_id: session.user.id },
+          include: { user: true }
+        });
+      } else {
+        customers = await prisma.customer.findMany({
+          include: { 
+              user: { select: { id: true, email: true, nombre: true, apellido: true } }
+          },
+          orderBy: { created_at: 'desc' }
+        });
+      }
+      return NextResponse.json(customers, { status: 200 });
+    } catch (error) {
+      return NextResponse.json({ message: 'Internal Server Error' }, { status: 500 });
     }
-    return NextResponse.json(customers, { status: 200 });
-  } catch (error) {
-    return NextResponse.json({ message: 'Internal Server Error' }, { status: 500 });
-  }
+  });
 }

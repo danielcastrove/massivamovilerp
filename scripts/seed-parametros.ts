@@ -19,6 +19,7 @@ async function main() {
     { key: 'ULTIMO_NUMERO_FACTURA', value: '100000' },
     { key: 'ULTIMO_NUMERO_CONTROL', value: '100000' },
     { key: 'ULTIMO_NUMERO_RECIBO', value: '100000' },
+    { key: 'ULTIMO_NUMERO_CONTROL_RECIBO', value: '100000' },
     { key: 'ULTIMO_NUMERO_RETENCION_IVA', value: '100000' },
     { key: 'ULTIMO_NUMERO_RETENCION_ISLR', value: '100000' },
   ];

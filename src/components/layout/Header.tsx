@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import Image from 'next/image'; // Import Image component
-import { CircleUser, Menu, Package2, Home, DollarSign, Users, Settings, LayoutGrid } from "lucide-react";
+import { CircleUser, Menu, Package2, Home, DollarSign, Users, Coins, LayoutGrid } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -23,13 +23,17 @@ import { type ComponentType } from "react";
 const generalLinks = [
   { href: "/dashboard", label: "Dashboard", icon: Home },
   { href: "/dashboard/facturacion", label: "Facturación", icon: DollarSign },
-  { href: "/customers", label: "Clientes", icon: Users },
-  { href: "/settings", label: "Configuración", icon: Settings },
+  { href: "/dashboard/customer", label: "Clientes", icon: Users },
+  { href: "/dashboard/cobranzas", label: "Cobranza", icon: Coins },
 ];
 
 // Map for dynamic module icons
 const iconMap: { [key: string]: ComponentType<{ className: string }> } = {
   '/client-portal': LayoutGrid,
+  '/dashboard': Home,
+  '/dashboard/facturacion': DollarSign,
+  '/dashboard/customer': Users,
+  '/dashboard/cobranzas': Coins,
 };
 
 export function Header() {
@@ -131,11 +135,11 @@ export function Header() {
             </DropdownMenuLabel>
           )}
           <DropdownMenuSeparator />
-          <DropdownMenuItem>My Account</DropdownMenuItem>
-          <DropdownMenuItem>Settings</DropdownMenuItem>
-          <DropdownMenuItem>Support</DropdownMenuItem>
+          <DropdownMenuItem onClick={() => window.location.href = "/dashboard"}>Dashboard</DropdownMenuItem>
+          <DropdownMenuItem onClick={() => window.location.href = "/dashboard/settings"}>Perfil</DropdownMenuItem>
+          <DropdownMenuItem disabled>Atención al cliente</DropdownMenuItem>
           <DropdownMenuSeparator />
-          <DropdownMenuItem onClick={() => signOut()}>Logout</DropdownMenuItem>
+          <DropdownMenuItem onClick={() => signOut()} className="text-red-600 focus:text-red-600">Cerrar sesión</DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
     </header>
