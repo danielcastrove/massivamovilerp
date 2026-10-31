@@ -12,6 +12,7 @@ import { PriceListForm } from "./PriceListForm";
 import * as z from "zod";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { PriceListDetailsModal } from "./PriceListDetailsModal";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { DataPagination } from "@/components/ui/data-pagination";
 
 const formSchema = z.object({
@@ -53,6 +54,7 @@ export function PriceListsTab() {
   const [searchTerm, setSearchTerm] = useState("");
   const ITEMS_PER_PAGE = 20;
   const [currentPage, setCurrentPage] = useState(1);
+  const [itemsPerPage, setItemsPerPage] = useState(ITEMS_PER_PAGE);
 
   async function fetchPriceLists() {
     try {
@@ -181,10 +183,13 @@ export function PriceListsTab() {
     });
   }, [priceLists, searchTerm]);
 
+  const totalPages = Math.max(1, Math.ceil(filteredPriceLists.length / itemsPerPage));
+  const safePage = Math.min(currentPage, totalPages);
+
   const paginatedPriceLists = useMemo(() => {
-    const start = (currentPage - 1) * ITEMS_PER_PAGE;
-    return filteredPriceLists.slice(start, start + ITEMS_PER_PAGE);
-  }, [filteredPriceLists, currentPage]);
+    const start = (safePage - 1) * itemsPerPage;
+    return filteredPriceLists.slice(start, start + itemsPerPage);
+  }, [filteredPriceLists, safePage, itemsPerPage]);
 
 
   if (loading) {
@@ -390,13 +395,38 @@ export function PriceListsTab() {
               </TableBody>
             </Table>
           )}
-          {filteredPriceLists.length > ITEMS_PER_PAGE && (
-            <DataPagination
-              currentPage={currentPage}
-              totalItems={filteredPriceLists.length}
-              itemsPerPage={ITEMS_PER_PAGE}
-              onPageChange={setCurrentPage}
-            />
+          {filteredPriceLists.length > 0 && (
+            <div className="flex items-center gap-4 px-4 py-3 border-t border-slate-100">
+              <div className="flex items-center gap-2">
+                <span className="text-[11px] text-slate-500">Mostrar</span>
+                <Select
+                  value={String(itemsPerPage)}
+                  onValueChange={(v) => {
+                    setItemsPerPage(Number(v));
+                    setCurrentPage(1);
+                  }}
+                >
+                  <SelectTrigger className="h-8 w-[72px] text-xs">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="10">10</SelectItem>
+                    <SelectItem value="20">20</SelectItem>
+                    <SelectItem value="50">50</SelectItem>
+                    <SelectItem value="100">100</SelectItem>
+                  </SelectContent>
+                </Select>
+                <span className="text-[11px] text-slate-500">por página</span>
+              </div>
+              <div className="flex-1 min-w-0">
+                <DataPagination
+                  currentPage={safePage}
+                  totalItems={filteredPriceLists.length}
+                  itemsPerPage={itemsPerPage}
+                  onPageChange={setCurrentPage}
+                />
+              </div>
+            </div>
           )}
         </CardContent>
       </Card>

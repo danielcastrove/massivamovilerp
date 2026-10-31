@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo, useEffect, useCallback } from "react";
+import { useState, useMemo, useEffect, useCallback, useRef } from "react";
 import { useForm, useFieldArray, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
@@ -20,8 +20,7 @@ import {
 } from "lucide-react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
-import { addDays, format } from "date-fns";
-import { getBillingCycleDays } from "@/lib/utils/recurrence";
+import { format, addMonths } from "date-fns";
 
 import { Button } from "@/components/ui/button";
 import {
@@ -65,6 +64,7 @@ const invoiceFormSchema = z.object({
   customerId: z.string().min(1, "Seleccione un cliente"),
   type: z.enum(["FACTURA", "RECIBO"]),
   currencyMode: z.enum(["USD_BS", "USD_ONLY"]).default("USD_BS"),
+  issueDate: z.string().min(1, "Fecha de emisión requerida"),
   dueDate: z.string().min(1, "Fecha requerida"),
   invoiceNumber: z.number().optional(),
   controlNumber: z.number().optional(),
@@ -74,11 +74,37 @@ const invoiceFormSchema = z.object({
 
 type InvoiceFormValues = z.infer<typeof invoiceFormSchema>;
 
+// Vencimiento automático: se calcula desde el ciclo de facturación (billing_cycle) de los productos de la factura
+const billingCycleMeses: Record<string, number> = { MONTHLY: 1, BIMONTHLY: 2 };
+
+const sumarMesesISO = (issueISO: string, meses: number): string =>
+  format(addMonths(new Date(`${issueISO}T12:00:00`), meses), "yyyy-MM-dd");
+
+const mesesMaximosDeItems = (items: any[], prices: Record<string, any[]>): number | null => {
+  let max: number | null = null;
+  (items || []).forEach((item: any) => {
+    if (item?.isCustom || !item?.productId || !item?.priceListId) return;
+    const p = (prices[item.priceListId] || []).find((pr: any) => pr.product_id === item.productId);
+    const meses = p?.product?.billing_cycle ? billingCycleMeses[p.product.billing_cycle] : undefined;
+    if (meses && (max === null || meses > max)) max = meses;
+  });
+  return max;
+};
+
+// Canal del producto por nombre: WhatsApp y SMS no se pueden mezclar en la misma factura
+const canalDeNombre = (nombre?: string | null): "WHATSAPP" | "SMS" | null => {
+  const s = String(nombre || "");
+  if (/whatsapp/i.test(s)) return "WHATSAPP";
+  if (/sms/i.test(s)) return "SMS";
+  return null;
+};
+
 const DEFAULT_FORM_VALUES: InvoiceFormValues = {
   customerId: "",
   type: "FACTURA",
   currencyMode: "USD_BS",
-  dueDate: new Date().toISOString().split('T')[0],
+  issueDate: new Date().toISOString().split('T')[0],
+  dueDate: sumarMesesISO(new Date().toISOString().split('T')[0], 1),
   invoiceNumber: undefined,
   controlNumber: undefined,
   applyIgtf: false,
@@ -94,6 +120,7 @@ interface InvoiceFormProps {
     customerId: string;
     type: string;
     currency_mode?: string;
+    issue_date?: string;
     due_date?: string;
     invoice_number?: number;
     control_number?: number;
@@ -118,14 +145,13 @@ export default function InvoiceForm({
   const [loading, setLoading] = useState(false);
   // Cache de productos por lista de precios para evitar fetchings repetitivos
   const [pricesCache, setPricesCache] = useState<Record<string, any[]>>({});
-  // Track si el usuario editó manualmente la fecha de vencimiento
-  const [userEditedDueDate, setUserEditedDueDate] = useState(false);
 
   const form = useForm<InvoiceFormValues>({
     resolver: zodResolver(invoiceFormSchema),
     defaultValues: isEditing ? {
       customerId: initialInvoiceData.customerId,
       type: initialInvoiceData.type as any,
+      issueDate: initialInvoiceData.issue_date || new Date().toISOString().split('T')[0],
       dueDate: initialInvoiceData.due_date || new Date().toISOString().split('T')[0],
       invoiceNumber: initialInvoiceData.invoice_number,
       controlNumber: initialInvoiceData.control_number,
@@ -158,12 +184,39 @@ export default function InvoiceForm({
   });
 
   const invoiceType = form.watch("type");
+  const watchedIssueDate = form.watch("issueDate");
+
+  // Clave estable de la selección de productos (para recalcular el vencimiento solo cuando cambian productos/emisión,
+  // sin pisar ediciones manuales al tocar cantidades o precios)
+  const claveProductos = useMemo(
+    () => (watchedItems || []).map((it: any) => `${it?.priceListId || ""}:${it?.productId || ""}:${it?.isCustom ? 1 : 0}`).join("|"),
+    [watchedItems]
+  );
 
   const watchedApplyIgtf = useWatch({
     control: form.control,
     name: "applyIgtf",
     defaultValue: false
   });
+
+  // Vencimiento automático: derivado del ciclo de facturación (billing_cycle) de los productos de la factura.
+  // Se salta el primer render para no pisar las fechas cargadas al editar una factura existente.
+  const fechasCalculadas = useRef(false);
+  useEffect(() => {
+    if (!fechasCalculadas.current) {
+      fechasCalculadas.current = true;
+      return;
+    }
+    const meses = mesesMaximosDeItems(watchedItems, pricesCache);
+    const actual = form.getValues("dueDate");
+    if (meses && watchedIssueDate) {
+      form.setValue("dueDate", sumarMesesISO(watchedIssueDate, meses), { shouldValidate: true, shouldDirty: true });
+    } else if (actual && watchedIssueDate && actual < watchedIssueDate) {
+      // Sin ciclo definido: al menos evitar un vencimiento anterior a la emisión
+      form.setValue("dueDate", watchedIssueDate, { shouldValidate: true, shouldDirty: true });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [claveProductos, watchedIssueDate]);
 
   // --- Cargar precios iniciales si estamos editando ---
   useEffect(() => {
@@ -174,34 +227,6 @@ export default function InvoiceForm({
       });
     }
   }, [isEditing, initialInvoiceData]);
-
-  // --- Auto-calcula dueDate cuando cambian los items (si el usuario no lo editó) ---
-  useEffect(() => {
-    if (isEditing || userEditedDueDate) return;
-
-    const allPrices = Object.values(pricesCache).flat();
-    if (allPrices.length === 0) return;
-
-    const productIds = watchedItems
-      .filter((item: any) => item.productId && !item.isCustom)
-      .map((item: any) => item.productId);
-
-    if (productIds.length === 0) return;
-
-    const billingDaysList = productIds
-      .map((id: string) => {
-        const price = allPrices.find((p: any) => p.product_id === id);
-        return getBillingCycleDays(price?.product?.billing_cycle);
-      })
-      .filter((d: number) => d > 0);
-
-    if (billingDaysList.length > 0) {
-      const maxDays = Math.max(...billingDaysList);
-      const newDueDate = addDays(new Date(), maxDays);
-      form.setValue("dueDate", format(newDueDate, "yyyy-MM-dd"), { shouldValidate: true });
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [watchedItems, pricesCache, userEditedDueDate, isEditing]);
 
   // --- Función para obtener precios de una lista específica ---
   const fetchPricesForList = async (listId: string) => {
@@ -240,9 +265,18 @@ export default function InvoiceForm({
       ));
 
       // Cargar todas las listas necesarias en paralelo antes de procesar los items
-      await Promise.all(uniqueListIds.map(listId => fetchPricesForList(listId)));
+      const fetchedPrices = await Promise.all(uniqueListIds.map(listId => fetchPricesForList(listId)));
 
-      const newItems = contractedServices.map(([listId, prodId, isManual, customName]) => {
+      // Precios ya cargados arriba (evita leer el estado desactualizado de pricesCache)
+      const preciosDe = (listId: string) => {
+        const i = uniqueListIds.indexOf(listId);
+        return (i >= 0 && fetchedPrices[i]) || pricesCache[listId] || [];
+      };
+
+      let canalPermitido: "WHATSAPP" | "SMS" | null = null;
+      const newItems: any[] = [];
+
+      contractedServices.forEach(([listId, prodId, isManual, customName]) => {
         const item: any = {
           priceListId: listId || "",
           productId: prodId || "",
@@ -254,29 +288,24 @@ export default function InvoiceForm({
         };
 
         if (!isManual && listId && prodId) {
-          // Ya están en cache por el Promise.all de arriba
-          const prices = pricesCache[listId] || [];
-          const pPrice = prices.find((p: any) => p.product_id === prodId);
+          const pPrice = preciosDe(listId).find((p: any) => p.product_id === prodId);
           if (pPrice) {
             item.unitPriceUsd = Number(pPrice.price_usd);
             item.totalUsd = item.unitPriceUsd;
-          } else {
-            // Intento de búsqueda en cache global si no se cargó arriba (seguridad)
-            fetchPricesForList(listId).then(prices => {
-              const p = prices.find((p: any) => p.product_id === prodId);
-              if (p) {
-                const price = Number(p.price_usd);
-                // Esto podría causar un re-render adicional pero asegura consistencia
-                // En un refactor mayor usaríamos un store o un hook de fetching
-              }
-            });
+          }
+
+          // Una sola canal por factura: si hay productos WhatsApp no se admiten SMS y viceversa (se descartan los del otro canal)
+          const canal = canalDeNombre(pPrice?.product?.name);
+          if (canal) {
+            if (!canalPermitido) canalPermitido = canal;
+            else if (canal !== canalPermitido) return;
           }
         }
-        
-        return item;
+
+        newItems.push(item);
       });
 
-      form.setValue("items", newItems, { shouldValidate: true, shouldDirty: true });
+      form.setValue("items", newItems.length > 0 ? newItems : [DEFAULT_FORM_VALUES.items[0]], { shouldValidate: true, shouldDirty: true });
       setTimeout(() => form.trigger(), 100);
     } else {
       // Si no tiene servicios definidos, usamos el default limpio
@@ -319,6 +348,7 @@ export default function InvoiceForm({
       // Usamos T12:00:00 para evitar que el desfase de zona horaria cambie el día
       const payload = { 
         ...values, 
+        issue_date: values.issueDate ? `${values.issueDate}T12:00:00` : null,
         due_date: values.dueDate ? `${values.dueDate}T12:00:00` : null,
         currency_mode: values.currencyMode,
         invoice_number: values.invoiceNumber,
@@ -446,7 +476,20 @@ export default function InvoiceForm({
                     />
                   )}
 
-                  {/* Campo Fecha de Vencimiento */}
+                  {/* Fechas del Documento: Emisión (editable) y Vencimiento (automático según ciclo de los productos, editable) */}
+                  <FormField
+                    control={form.control}
+                    name="issueDate"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel className="text-xs font-bold uppercase text-slate-400">Fecha de Emisión</FormLabel>
+                        <FormControl>
+                          <Input type="date" className="border-slate-200 h-11" {...field} />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
                   <FormField
                     control={form.control}
                     name="dueDate"
@@ -454,15 +497,11 @@ export default function InvoiceForm({
                       <FormItem>
                         <FormLabel className="text-xs font-bold uppercase text-slate-400">Vencimiento de la Factura</FormLabel>
                         <FormControl>
-                          <Input 
-                            type="date" 
+                          <Input
+                            type="date"
                             className="border-slate-200 h-11"
-                            min={format(new Date(), "yyyy-MM-dd")}
+                            min={watchedIssueDate || undefined}
                             {...field}
-                            onChange={(e) => {
-                              setUserEditedDueDate(true);
-                              field.onChange(e);
-                            }}
                           />
                         </FormControl>
                         <FormMessage />
@@ -574,28 +613,44 @@ export default function InvoiceForm({
                           <FormField
                             control={form.control}
                             name={`items.${index}.productId`}
-                            render={({ field: pField }) => (
-                              <FormItem>
-                                <Select onValueChange={(v) => {
-                                  pField.onChange(v);
-                                  const currentListId = form.getValues(`items.${index}.priceListId`);
-                                  const currentPrices = currentListId ? (pricesCache[currentListId] || []) : [];
-                                  const p = currentPrices.find(ap => ap.product_id === v);
-                                  if (p) {
-                                    const price = Number(p.price_usd);
-                                    form.setValue(`items.${index}.unitPriceUsd`, price, { shouldValidate: true, shouldDirty: true });
-                                    form.setValue(`items.${index}.totalUsd`, price * (form.getValues(`items.${index}.quantity`) || 1), { shouldValidate: true, shouldDirty: true });
-                                  }
-                                }} value={pField.value} disabled={!watchedItems[index]?.priceListId}>
-                                  <FormControl><SelectTrigger className="border-slate-200 text-[11px] h-9"><SelectValue placeholder="Servicio..." /></SelectTrigger></FormControl>
-                                  <SelectContent>
-                                    {((watchedItems[index]?.priceListId ? pricesCache[watchedItems[index]?.priceListId] : undefined) || []).map((p: any) => (
-                                      <SelectItem key={p.product_id} value={p.product_id}>{p.product.name}</SelectItem>
-                                    ))}
-                                  </SelectContent>
-                                </Select>
-                              </FormItem>
-                            )}
+                            render={({ field: pField }) => {
+                              // Canales (WhatsApp/SMS) ya usados en OTRAS filas: no se permiten canales distintos en la misma factura
+                              const canalesOtrasFilas = new Set<string>();
+                              watchedItems.forEach((it: any, i: number) => {
+                                if (i === index || it?.isCustom || !it?.productId || !it?.priceListId) return;
+                                const pr = (pricesCache[it.priceListId] || []).find((x: any) => x.product_id === it.productId);
+                                const c = canalDeNombre(pr?.product?.name);
+                                if (c) canalesOtrasFilas.add(c);
+                              });
+                              const productosVisibles = ((watchedItems[index]?.priceListId ? pricesCache[watchedItems[index]?.priceListId] : undefined) || [])
+                                .filter((p: any) => {
+                                  const c = canalDeNombre(p?.product?.name);
+                                  if (!c || canalesOtrasFilas.size === 0) return true;
+                                  return Array.from(canalesOtrasFilas).every((x) => x === c);
+                                });
+                              return (
+                                <FormItem>
+                                  <Select onValueChange={(v) => {
+                                    pField.onChange(v);
+                                    const currentListId = form.getValues(`items.${index}.priceListId`);
+                                    const currentPrices = currentListId ? (pricesCache[currentListId] || []) : [];
+                                    const p = currentPrices.find(ap => ap.product_id === v);
+                                    if (p) {
+                                      const price = Number(p.price_usd);
+                                      form.setValue(`items.${index}.unitPriceUsd`, price, { shouldValidate: true, shouldDirty: true });
+                                      form.setValue(`items.${index}.totalUsd`, price * (form.getValues(`items.${index}.quantity`) || 1), { shouldValidate: true, shouldDirty: true });
+                                    }
+                                  }} value={pField.value} disabled={!watchedItems[index]?.priceListId}>
+                                    <FormControl><SelectTrigger className="border-slate-200 text-[11px] h-9"><SelectValue placeholder="Servicio..." /></SelectTrigger></FormControl>
+                                    <SelectContent>
+                                      {productosVisibles.map((p: any) => (
+                                        <SelectItem key={p.product_id} value={p.product_id}>{p.product.name}</SelectItem>
+                                      ))}
+                                    </SelectContent>
+                                  </Select>
+                                </FormItem>
+                              );
+                            }}
                           />
                         )}
                       </div>

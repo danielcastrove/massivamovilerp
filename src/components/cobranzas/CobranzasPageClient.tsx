@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useMemo, useEffect, useRef } from "react";
-import { Search, AlertCircle, Clock, MoreHorizontal, Eye, FileText, CreditCard, TrendingUp, ArrowUpRight, Pencil, Download, Trash2, Loader2, User, RefreshCw, CalendarDays, X, Package, MessageSquare, Phone, Mail } from "lucide-react";
+import { Search, AlertCircle, Clock, MoreHorizontal, Eye, FileText, CreditCard, TrendingUp, ArrowUpRight, Pencil, Download, Trash2, Loader2, User, RefreshCw, CalendarDays, X, Package, MessageSquare, MessagesSquare, Phone, Mail } from "lucide-react";
 import { format, isBefore, startOfDay, endOfDay } from "date-fns";
 import { es } from "date-fns/locale";
 import * as XLSX from "xlsx";
@@ -39,6 +39,7 @@ import { useRouter } from "next/navigation";
 import NotificationModal from "@/components/ui/notification-modal";
 import { DataPagination } from "@/components/ui/data-pagination";
 import { ContactModal, ContactEntity } from "@/components/customers/ContactModal";
+import BulkContactModal from "@/components/customers/BulkContactModal";
 
 // Dynamic imports for heavy modals
 const PaymentModal = dynamic(() => import("./PaymentModal"), { ssr: false });
@@ -70,6 +71,7 @@ export default function CobranzasPageClient({ initialCustomers, bcvRate }: Cobra
   const ITEMS_PER_PAGE = 20;
   const [currentPageDebtors, setCurrentPageDebtors] = useState(1);
   const [currentPagePayments, setCurrentPagePayments] = useState(1);
+  const [itemsPerPage, setItemsPerPage] = useState(ITEMS_PER_PAGE);
 
   // Estado para Modal de Notificación
   const [notification, setNotification] = useState<{
@@ -98,6 +100,7 @@ export default function CobranzasPageClient({ initialCustomers, bcvRate }: Cobra
   const [contactModalOpen, setContactModalOpen] = useState(false);
   const [contactChannel, setContactChannel] = useState<"SMS" | "WHATSAPP" | "EMAIL">("SMS");
   const [contactEntity, setContactEntity] = useState<ContactEntity | undefined>(undefined);
+  const [isBulkContactOpen, setIsBulkContactOpen] = useState(false);
 
   const fetchPayments = async () => {
     setLoadingPayments(true);
@@ -129,6 +132,8 @@ export default function CobranzasPageClient({ initialCustomers, bcvRate }: Cobra
       telefono_empresa: customer.telefono_empresa,
       telefono_celular: customer.telefono_celular,
       persona_contacto_info: customer.persona_contacto_info,
+      persona_cobranza_info: customer.persona_cobranza_info,
+      contactos_extra: customer.contactos_extra,
     });
     setContactChannel(channel);
     setContactModalOpen(true);
@@ -302,7 +307,7 @@ export default function CobranzasPageClient({ initialCustomers, bcvRate }: Cobra
           if (Number.isNaN(due)) return false;
           if (startDate && due < startDate.getTime()) return false;
           if (endDate && due > endDate.getTime()) return false;
-          if (!startDate && !endDate && due > cutoff.getTime()) return false;
+          if (!startDate && !endDate && frecuenciaFilter === "ALL" && due > cutoff.getTime()) return false;
           if (docTypeFilter !== "ALL" && inv.type !== docTypeFilter) return false;
           if (categoryFilter !== "ALL") {
             const hasCategory = (inv.invoice_items || []).some(
@@ -314,12 +319,25 @@ export default function CobranzasPageClient({ initialCustomers, bcvRate }: Cobra
           if (statusFilter === "OVERDUE" && inv.status !== "OVERDUE") return false;
           if (frecuenciaFilter !== "ALL") {
             const days = parseInt(frecuenciaFilter, 10);
-            const rangeStart = new Date(today);
-            rangeStart.setDate(today.getDate() - days);
             const dueTime = new Date(getDueDate(inv)).getTime();
+            if (Number.isNaN(dueTime)) return false;
+            const todayStart = startOfDay(today).getTime();
             const todayEnd = endOfDay(today).getTime();
-            const rangeStartTime = startOfDay(rangeStart).getTime();
-            if (Number.isNaN(dueTime) || dueTime < rangeStartTime || dueTime > todayEnd) return false;
+
+            if (statusFilter === "SENT") {
+              // Hacia adelante: [hoy, hoy + días] — facturas por vencer
+              const rangeEnd = endOfDay(new Date(today.getFullYear(), today.getMonth(), today.getDate() + days)).getTime();
+              if (dueTime < todayStart || dueTime > rangeEnd) return false;
+            } else if (statusFilter === "OVERDUE") {
+              // Hacia atrás: [hoy - días, hoy] — vencimientos recientes
+              const rangeStart = startOfDay(new Date(today.getFullYear(), today.getMonth(), today.getDate() - days)).getTime();
+              if (dueTime < rangeStart || dueTime > todayEnd) return false;
+            } else {
+              // Todos: [hoy - días, hoy + días]
+              const rangeStart = startOfDay(new Date(today.getFullYear(), today.getMonth(), today.getDate() - days)).getTime();
+              const rangeEnd = endOfDay(new Date(today.getFullYear(), today.getMonth(), today.getDate() + days)).getTime();
+              if (dueTime < rangeStart || dueTime > rangeEnd) return false;
+            }
           }
           return true;
         })
@@ -341,15 +359,19 @@ export default function CobranzasPageClient({ initialCustomers, bcvRate }: Cobra
     });
   }, [initialCustomers, searchTerm, filterStartDate, filterEndDate, docTypeFilter, categoryFilter, statusFilter, frecuenciaFilter]);
 
+  const totalPagesDebtors = Math.max(1, Math.ceil(filteredCustomers.length / itemsPerPage));
+  const safePageDebtors = Math.min(currentPageDebtors, totalPagesDebtors);
   const paginatedCustomers = useMemo(() => {
-    const start = (currentPageDebtors - 1) * ITEMS_PER_PAGE;
-    return filteredCustomers.slice(start, start + ITEMS_PER_PAGE);
-  }, [filteredCustomers, currentPageDebtors]);
+    const start = (safePageDebtors - 1) * itemsPerPage;
+    return filteredCustomers.slice(start, start + itemsPerPage);
+  }, [filteredCustomers, safePageDebtors, itemsPerPage]);
 
+  const totalPagesPayments = Math.max(1, Math.ceil(payments.length / itemsPerPage));
+  const safePagePayments = Math.min(currentPagePayments, totalPagesPayments);
   const paginatedPayments = useMemo(() => {
-    const start = (currentPagePayments - 1) * ITEMS_PER_PAGE;
-    return payments.slice(start, start + ITEMS_PER_PAGE);
-  }, [payments, currentPagePayments]);
+    const start = (safePagePayments - 1) * itemsPerPage;
+    return payments.slice(start, start + itemsPerPage);
+  }, [payments, safePagePayments, itemsPerPage]);
 
   const handleExportExcel = () => {
     const rows = filteredCustomers.flatMap(cust =>
@@ -412,6 +434,13 @@ export default function CobranzasPageClient({ initialCustomers, bcvRate }: Cobra
     if (isBefore(dueDate, today)) return { color: "bg-red-500", text: "text-red-600", bg: "bg-red-50" };
     return { color: "bg-amber-500", text: "text-amber-600", bg: "bg-amber-50" };
   };
+
+  const freqLabel = (n: number) =>
+    statusFilter === "SENT"
+      ? `Próximos ${n} días`
+      : statusFilter === "OVERDUE"
+        ? `Últimos ${n} días`
+        : `± ${n} días`;
 
   return (
     <div className="space-y-6">
@@ -532,12 +561,12 @@ export default function CobranzasPageClient({ initialCustomers, bcvRate }: Cobra
                     </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="ALL">Todas</SelectItem>
-                      <SelectItem value="10">Últimos 10 días</SelectItem>
-                      <SelectItem value="15">Últimos 15 días</SelectItem>
-                      <SelectItem value="30">Últimos 30 días</SelectItem>
-                      <SelectItem value="45">Últimos 45 días</SelectItem>
-                      <SelectItem value="60">Últimos 60 días</SelectItem>
-                      <SelectItem value="90">Últimos 90 días</SelectItem>
+                      <SelectItem value="10">{freqLabel(10)}</SelectItem>
+                      <SelectItem value="15">{freqLabel(15)}</SelectItem>
+                      <SelectItem value="30">{freqLabel(30)}</SelectItem>
+                      <SelectItem value="45">{freqLabel(45)}</SelectItem>
+                      <SelectItem value="60">{freqLabel(60)}</SelectItem>
+                      <SelectItem value="90">{freqLabel(90)}</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
@@ -595,6 +624,15 @@ export default function CobranzasPageClient({ initialCustomers, bcvRate }: Cobra
                     </SelectContent>
                   </Select>
                 </div>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="h-9 text-[11px] text-cyan-600 border-cyan-200 hover:bg-cyan-50"
+                  onClick={() => setIsBulkContactOpen(true)}
+                  disabled={filteredCustomers.length === 0}
+                >
+                  <MessagesSquare className="h-3.5 w-3.5 mr-1" /> Mensaje General
+                </Button>
                 <Button
                   variant="outline"
                   size="sm"
@@ -790,13 +828,39 @@ export default function CobranzasPageClient({ initialCustomers, bcvRate }: Cobra
                 )}
               </TableBody>
             </Table>
-            {filteredCustomers.length > ITEMS_PER_PAGE && (
-              <DataPagination
-                currentPage={currentPageDebtors}
-                totalItems={filteredCustomers.length}
-                itemsPerPage={ITEMS_PER_PAGE}
-                onPageChange={setCurrentPageDebtors}
-              />
+            {filteredCustomers.length > 0 && (
+              <div className="flex items-center gap-4 px-4 py-3 border-t border-slate-100">
+                <div className="flex items-center gap-2">
+                  <span className="text-[11px] text-slate-500">Mostrar</span>
+                  <Select
+                    value={String(itemsPerPage)}
+                    onValueChange={(v) => {
+                      setItemsPerPage(Number(v));
+                      setCurrentPageDebtors(1);
+                      setCurrentPagePayments(1);
+                    }}
+                  >
+                    <SelectTrigger className="h-8 w-[72px] text-xs">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="10">10</SelectItem>
+                      <SelectItem value="20">20</SelectItem>
+                      <SelectItem value="50">50</SelectItem>
+                      <SelectItem value="100">100</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <span className="text-[11px] text-slate-500">por página</span>
+                </div>
+                <div className="flex-1 min-w-0">
+                  <DataPagination
+                    currentPage={safePageDebtors}
+                    totalItems={filteredCustomers.length}
+                    itemsPerPage={itemsPerPage}
+                    onPageChange={setCurrentPageDebtors}
+                  />
+                </div>
+              </div>
             )}
           </Card>
         </TabsContent>
@@ -881,13 +945,39 @@ export default function CobranzasPageClient({ initialCustomers, bcvRate }: Cobra
                 )}
               </TableBody>
             </Table>
-            {payments.length > ITEMS_PER_PAGE && (
-              <DataPagination
-                currentPage={currentPagePayments}
-                totalItems={payments.length}
-                itemsPerPage={ITEMS_PER_PAGE}
-                onPageChange={setCurrentPagePayments}
-              />
+            {payments.length > 0 && (
+              <div className="flex items-center gap-4 px-4 py-3 border-t border-slate-100">
+                <div className="flex items-center gap-2">
+                  <span className="text-[11px] text-slate-500">Mostrar</span>
+                  <Select
+                    value={String(itemsPerPage)}
+                    onValueChange={(v) => {
+                      setItemsPerPage(Number(v));
+                      setCurrentPageDebtors(1);
+                      setCurrentPagePayments(1);
+                    }}
+                  >
+                    <SelectTrigger className="h-8 w-[72px] text-xs">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="10">10</SelectItem>
+                      <SelectItem value="20">20</SelectItem>
+                      <SelectItem value="50">50</SelectItem>
+                      <SelectItem value="100">100</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <span className="text-[11px] text-slate-500">por página</span>
+                </div>
+                <div className="flex-1 min-w-0">
+                  <DataPagination
+                    currentPage={safePagePayments}
+                    totalItems={payments.length}
+                    itemsPerPage={itemsPerPage}
+                    onPageChange={setCurrentPagePayments}
+                  />
+                </div>
+              </div>
             )}
           </Card>
         </TabsContent>
@@ -942,8 +1032,17 @@ export default function CobranzasPageClient({ initialCustomers, bcvRate }: Cobra
           }}
           entity={contactEntity}
           channel={contactChannel}
+          preferSources={["cobranza", "contacto"]}
         />
       )}
+
+      <BulkContactModal
+        isOpen={isBulkContactOpen}
+        onClose={() => setIsBulkContactOpen(false)}
+        entities={filteredCustomers.map(c => ({ id: c.id, name: c.name }))}
+        apiEntity="customers"
+        destinos={["principal", "contacto", "cobranza"]}
+      />
     </div>
   );
 }

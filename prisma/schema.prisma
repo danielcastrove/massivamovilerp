@@ -83,6 +83,7 @@ model Customer {
   representante_legal_info            Json?
   documento_constitutivo_info         Json?
   persona_cobranza_info               Json?
+  contactos_extra                     Json?          // Array: [{ tipo: "EMAIL" | "PHONE", valor: string }]
   fecha_constitucion                  DateTime?
   urbanizacion                        String?
   ciudad                              String?
@@ -236,6 +237,7 @@ model Lead {
   cedula         String?
   email          String?
   telefono       String?
+  contactos_extra Json?          // Array: [{ tipo: "EMAIL" | "PHONE", valor: string }]
   
   // Producto interesado (Catálogo o Manual)
   productId      String?

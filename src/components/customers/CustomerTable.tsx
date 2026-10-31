@@ -1,7 +1,6 @@
 // massivamovilerp/src/components/customers/CustomerTable.tsx
 "use client";
 
-import { useState, useMemo, useEffect, useRef } from "react";
 import {
   Table,
   TableBody,
@@ -19,10 +18,10 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Button } from "@/components/ui/button";
-import { MoreHorizontal, MessageSquare, Phone, Mail } from "lucide-react";
+import { MoreHorizontal, MessageSquare, Phone, Mail, CheckCircle2, MinusCircle, Ban } from "lucide-react";
 import { Customer } from "./CustomerPageClient"; // Import the Customer interface
-import { DataPagination } from "@/components/ui/data-pagination";
 
+type CustomerStatus = "ACTIVE" | "INACTIVE" | "BLOCKED";
 
 interface CustomerTableProps {
   customers: Customer[];
@@ -30,26 +29,10 @@ interface CustomerTableProps {
   onDelete: (customerId: string) => void;
   onViewDetails: (customer: Customer) => void;
   onContact: (customer: Customer, channel: "SMS" | "WHATSAPP" | "EMAIL") => void;
+  onChangeStatus: (customer: Customer, status: CustomerStatus) => void;
 }
 
-const ITEMS_PER_PAGE = 20;
-
-export function CustomerTable({ customers, onEdit, onDelete, onViewDetails, onContact }: CustomerTableProps) {
-  const [currentPage, setCurrentPage] = useState(1);
-  const prevCustomersLengthRef = useRef(customers.length);
-
-  useEffect(() => {
-    if (customers.length !== prevCustomersLengthRef.current) {
-      prevCustomersLengthRef.current = customers.length;
-      setCurrentPage(1); // eslint-disable-line react-hooks/set-state-in-effect -- Reset page when customer count changes
-    }
-  }, [customers.length]);
-
-  const paginatedCustomers = useMemo(() => {
-    const start = (currentPage - 1) * ITEMS_PER_PAGE;
-    return customers.slice(start, start + ITEMS_PER_PAGE);
-  }, [customers, currentPage]);
-
+export function CustomerTable({ customers, onEdit, onDelete, onViewDetails, onContact, onChangeStatus }: CustomerTableProps) {
   return (
     <>
       <Table>
@@ -65,7 +48,7 @@ export function CustomerTable({ customers, onEdit, onDelete, onViewDetails, onCo
           </TableRow>
         </TableHeader>
         <TableBody>
-          {paginatedCustomers.map((customer) => (
+          {customers.map((customer) => (
           <TableRow key={customer.id}>
             <TableCell className="font-medium">{customer.name}</TableCell>
             <TableCell>{customer.doc_number}</TableCell>
@@ -108,6 +91,23 @@ export function CustomerTable({ customers, onEdit, onDelete, onViewDetails, onCo
                     Eliminar
                   </DropdownMenuItem>
                   <DropdownMenuSeparator />
+                  <DropdownMenuLabel className="text-[10px] font-bold uppercase text-slate-400 px-2 py-1.5">Cambiar Estado</DropdownMenuLabel>
+                  {customer.status !== 'ACTIVE' && (
+                    <DropdownMenuItem onClick={() => onChangeStatus(customer, "ACTIVE")} className="text-green-600 focus:text-green-700">
+                      <CheckCircle2 className="mr-2 h-4 w-4" /> Activo
+                    </DropdownMenuItem>
+                  )}
+                  {customer.status !== 'INACTIVE' && (
+                    <DropdownMenuItem onClick={() => onChangeStatus(customer, "INACTIVE")}>
+                      <MinusCircle className="mr-2 h-4 w-4 text-slate-500" /> Inactivo
+                    </DropdownMenuItem>
+                  )}
+                  {customer.status !== 'BLOCKED' && (
+                    <DropdownMenuItem onClick={() => onChangeStatus(customer, "BLOCKED")} className="text-red-600 focus:text-red-700">
+                      <Ban className="mr-2 h-4 w-4" /> Bloqueado
+                    </DropdownMenuItem>
+                  )}
+                  <DropdownMenuSeparator />
                   <DropdownMenuItem onClick={() => onViewDetails(customer)}>
                     Ver Detalles
                   </DropdownMenuItem>
@@ -118,14 +118,6 @@ export function CustomerTable({ customers, onEdit, onDelete, onViewDetails, onCo
         ))}
       </TableBody>
     </Table>
-      {customers.length > ITEMS_PER_PAGE && (
-        <DataPagination
-          currentPage={currentPage}
-          totalItems={customers.length}
-          itemsPerPage={ITEMS_PER_PAGE}
-          onPageChange={setCurrentPage}
-        />
-      )}
     </>
   );
 }

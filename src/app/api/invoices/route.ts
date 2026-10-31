@@ -26,6 +26,7 @@ export async function POST(req: Request) {
       applyIgtf, 
       currencyMode,
       due_date,
+      issue_date,
       invoice_number,
       control_number 
     } = body;
@@ -116,8 +117,8 @@ export async function POST(req: Request) {
       // ... (Creación del documento) ...
 
 
-      // Determinar Fecha de Vencimiento
-      const issueDate = new Date();
+      // Determinar Fecha de Emisión y Vencimiento
+      const issueDate = issue_date ? new Date(issue_date) : new Date();
       const dueDate = due_date ? new Date(due_date) : new Date();
       if (!due_date) dueDate.setDate(issueDate.getDate() + 30);
 

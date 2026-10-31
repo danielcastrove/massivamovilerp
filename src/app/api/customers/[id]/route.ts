@@ -174,6 +174,46 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
   });
 }
 
+// Cambio de estado puntual (Activo / Inactivo / Bloqueado) sin tener que enviar el formulario completo
+const statusChangeSchema = z.object({
+  status: z.enum(['ACTIVE', 'INACTIVE', 'BLOCKED']),
+});
+
+export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  return withApiKeyAuth(req, async (ctx) => {
+    try {
+      const { id } = await params;
+      if (!ctx?.fromApiKey) {
+        const session = ctx?.session ?? await auth();
+        if (!session || !session.user || (session.user.role !== 'MASSIVA_ADMIN' && session.user.role !== 'MASSIVA_EXTRA')) {
+          return NextResponse.json({ message: 'Unauthorized' }, { status: 401 });
+        }
+      }
+
+      const body = await req.json();
+      const validation = statusChangeSchema.safeParse(body);
+      if (!validation.success) {
+        return NextResponse.json({ message: 'Estado inválido. Use ACTIVE, INACTIVE o BLOCKED.' }, { status: 400 });
+      }
+
+      const updated = await prisma.customer.update({
+        where: { id },
+        data: { status: validation.data.status },
+        select: { id: true, status: true },
+      });
+
+      return NextResponse.json(updated, { status: 200 });
+    } catch (error) {
+      console.error("Error updating customer status:", error);
+      if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2025') {
+        return NextResponse.json({ message: 'Customer not found' }, { status: 404 });
+      }
+      const errorMessage = error instanceof Error ? error.message : "Ocurrió un error inesperado.";
+      return NextResponse.json({ message: errorMessage }, { status: 500 });
+    }
+  });
+}
+
 export async function DELETE(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   return withApiKeyAuth(req, async (ctx) => {
     try {

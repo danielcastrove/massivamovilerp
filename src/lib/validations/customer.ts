@@ -45,7 +45,7 @@ export const customerFormSchema = z.object({
   }),
   taxIdNumber: z.string().min(1, { message: "El número de RIF/Cédula es obligatorio." }),
   email: z.string().email({ message: "El email es inválido." }).min(1, { message: "El email es obligatorio." }),
-  phonePrefix: z.literal("+58").default("+58"),
+  // phonePrefix: z.literal("+58").default("+58"),
   phoneNumber: z.string().min(1, { message: "El número de teléfono principal es obligatorio." }),
   telefono_celularPrefix: z.literal("+58").default("+58"),
   telefono_celular: z.string().optional().nullable(),
@@ -232,7 +232,20 @@ export const formatPhoneNumberForSupabase = (phoneNumber: string | null | undefi
 };
 
 export const customerFormSchemaTransformed = customerFormSchema.transform((data) => {
-  const { businessName, fiscalAddress, taxIdPrefix, taxIdNumber, services, ...rest } = data;
+  // Se excluyen campos solo-de-formulario que no existen en el modelo Prisma Customer:
+  // phoneNumber → telefono_empresa, address → direccion_fiscal, telefono_celularPrefix/sameAsContact → UI.
+  const {
+    businessName,
+    fiscalAddress,
+    taxIdPrefix,
+    taxIdNumber,
+    services,
+    phoneNumber,
+    telefono_celularPrefix,
+    address,
+    sameAsContact,
+    ...rest
+  } = data;
 
   const transformedData: any = {
     ...rest,

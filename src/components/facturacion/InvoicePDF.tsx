@@ -300,9 +300,10 @@ const InvoicePDF = ({ invoice }: InvoicePDFProps) => {
           </View>
           
           <View style={styles.companyInfoColumn}>
-            <Text style={[styles.companyText, { marginTop: 15 }]}>Av. Principal de Las Mercedes, Edif. Centro Financiero,</Text>
-            <Text style={styles.companyText}>Piso 5, Oficina 5-A. Caracas, Venezuela.</Text>
-            <Text style={styles.companyText}>Teléfono: +58 (212) 123.45.67</Text>
+            <Text style={[styles.companyText, { marginTop: 15 }]}>Av. Universidad, esquina El Chorro a Traposos, Edif.</Text>
+            <Text style={styles.companyText}>Centro Empresarial, Piso 14 OF F-G, Urb. Catedral,</Text>
+            <Text style={styles.companyText}>Caracas, Distrito Capital, Zona Postal 1010.</Text>
+            <Text style={styles.companyText}>Teléfono: +58 (414) 370.19.52</Text>
             <View style={{ flexDirection: 'row' }}>
               <Text style={styles.companyText}>Email: </Text>
               <Text style={styles.companyText}>administracion@massivamovil.com</Text>

@@ -42,6 +42,13 @@ import {
 } from "@/components/ui/dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { useRouter } from "next/navigation";
 import { DataPagination } from "@/components/ui/data-pagination";
 
@@ -252,6 +259,7 @@ export default function InvoicePageClient({ initialInvoices, initialPayments }: 
   const [currentPage, setCurrentPage] = useState(1);
   const [currentPagePayments, setCurrentPagePayments] = useState(1);
   const ITEMS_PER_PAGE = 20;
+  const [itemsPerPage, setItemsPerPage] = useState(ITEMS_PER_PAGE);
   const router = useRouter();
 
   const handleOpenSelection = () => setIsSelectionModalOpen(true);
@@ -279,15 +287,21 @@ export default function InvoicePageClient({ initialInvoices, initialPayments }: 
     });
   }, [initialPayments, searchTerm]);
 
+  const totalPagesInvoices = Math.max(1, Math.ceil(filteredInvoices.length / itemsPerPage));
+  const safePageInvoices = Math.min(currentPage, totalPagesInvoices);
+
+  const totalPagesPayments = Math.max(1, Math.ceil(filteredPayments.length / itemsPerPage));
+  const safePagePayments = Math.min(currentPagePayments, totalPagesPayments);
+
   const paginatedInvoices = useMemo(() => {
-    const start = (currentPage - 1) * ITEMS_PER_PAGE;
-    return filteredInvoices.slice(start, start + ITEMS_PER_PAGE);
-  }, [filteredInvoices, currentPage]);
+    const start = (safePageInvoices - 1) * itemsPerPage;
+    return filteredInvoices.slice(start, start + itemsPerPage);
+  }, [filteredInvoices, safePageInvoices, itemsPerPage]);
 
   const paginatedPayments = useMemo(() => {
-    const start = (currentPagePayments - 1) * ITEMS_PER_PAGE;
-    return filteredPayments.slice(start, start + ITEMS_PER_PAGE);
-  }, [filteredPayments, currentPagePayments]);
+    const start = (safePagePayments - 1) * itemsPerPage;
+    return filteredPayments.slice(start, start + itemsPerPage);
+  }, [filteredPayments, safePagePayments, itemsPerPage]);
 
   return (
     <div className="p-6 space-y-6">
@@ -336,6 +350,7 @@ export default function InvoicePageClient({ initialInvoices, initialPayments }: 
                   <TableHead className="text-[10px] font-bold uppercase">Cliente</TableHead>
                   <TableHead className="text-[10px] font-bold uppercase">Tipo</TableHead>
                   <TableHead className="text-[10px] font-bold uppercase">Fecha Emisión</TableHead>
+                  <TableHead className="text-[10px] font-bold uppercase">Vencimiento</TableHead>
                   <TableHead className="text-[10px] font-bold uppercase">Monto USD</TableHead>
                   <TableHead className="text-[10px] font-bold uppercase">Monto Bs</TableHead>
                   <TableHead className="text-[10px] font-bold uppercase text-center">Estado</TableHead>
@@ -345,7 +360,7 @@ export default function InvoicePageClient({ initialInvoices, initialPayments }: 
               <TableBody>
                 {filteredInvoices.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={9} className="text-center py-10 text-slate-500">
+                    <TableCell colSpan={10} className="text-center py-10 text-slate-500">
                       No se encontraron documentos fiscales.
                     </TableCell>
                   </TableRow>
@@ -367,6 +382,9 @@ export default function InvoicePageClient({ initialInvoices, initialPayments }: 
                       <TableCell>
                         {format(new Date(invoice.issue_date), "dd MMM yyyy", { locale: es })}
                       </TableCell>
+                      <TableCell className={invoice.due_date && new Date(invoice.due_date) < new Date() && invoice.status !== "PAID" && invoice.status !== "CANCELLED" ? "text-red-600 font-bold" : undefined}>
+                        {invoice.due_date ? format(new Date(invoice.due_date), "dd MMM yyyy", { locale: es }) : "-"}
+                      </TableCell>
                       <TableCell className="font-bold">${invoice.total_usd.toFixed(2)}</TableCell>
                       <TableCell className="text-slate-500">Bs {invoice.total_bs.toLocaleString("es-VE", { minimumFractionDigits: 2 })}</TableCell>
                       <TableCell className="text-center">{getStatusBadge(invoice.status)}</TableCell>
@@ -378,13 +396,39 @@ export default function InvoicePageClient({ initialInvoices, initialPayments }: 
                 )}
               </TableBody>
             </Table>
-            {filteredInvoices.length > ITEMS_PER_PAGE && (
-              <DataPagination
-                currentPage={currentPage}
-                totalItems={filteredInvoices.length}
-                itemsPerPage={ITEMS_PER_PAGE}
-                onPageChange={setCurrentPage}
-              />
+            {filteredInvoices.length > 0 && (
+              <div className="flex items-center gap-4 px-4 py-3 border-t border-slate-100">
+                <div className="flex items-center gap-2">
+                  <span className="text-[11px] text-slate-500">Mostrar</span>
+                  <Select
+                    value={String(itemsPerPage)}
+                    onValueChange={(v) => {
+                      setItemsPerPage(Number(v));
+                      setCurrentPage(1);
+                      setCurrentPagePayments(1);
+                    }}
+                  >
+                    <SelectTrigger className="h-8 w-[72px] text-xs">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="10">10</SelectItem>
+                      <SelectItem value="20">20</SelectItem>
+                      <SelectItem value="50">50</SelectItem>
+                      <SelectItem value="100">100</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <span className="text-[11px] text-slate-500">por página</span>
+                </div>
+                <div className="flex-1 min-w-0">
+                  <DataPagination
+                    currentPage={safePageInvoices}
+                    totalItems={filteredInvoices.length}
+                    itemsPerPage={itemsPerPage}
+                    onPageChange={setCurrentPage}
+                  />
+                </div>
+              </div>
             )}
           </div>
         </TabsContent>
@@ -457,13 +501,39 @@ export default function InvoicePageClient({ initialInvoices, initialPayments }: 
                 )}
               </TableBody>
             </Table>
-            {filteredPayments.length > ITEMS_PER_PAGE && (
-              <DataPagination
-                currentPage={currentPagePayments}
-                totalItems={filteredPayments.length}
-                itemsPerPage={ITEMS_PER_PAGE}
-                onPageChange={setCurrentPagePayments}
-              />
+            {filteredPayments.length > 0 && (
+              <div className="flex items-center gap-4 px-4 py-3 border-t border-slate-100">
+                <div className="flex items-center gap-2">
+                  <span className="text-[11px] text-slate-500">Mostrar</span>
+                  <Select
+                    value={String(itemsPerPage)}
+                    onValueChange={(v) => {
+                      setItemsPerPage(Number(v));
+                      setCurrentPage(1);
+                      setCurrentPagePayments(1);
+                    }}
+                  >
+                    <SelectTrigger className="h-8 w-[72px] text-xs">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="10">10</SelectItem>
+                      <SelectItem value="20">20</SelectItem>
+                      <SelectItem value="50">50</SelectItem>
+                      <SelectItem value="100">100</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <span className="text-[11px] text-slate-500">por página</span>
+                </div>
+                <div className="flex-1 min-w-0">
+                  <DataPagination
+                    currentPage={safePagePayments}
+                    totalItems={filteredPayments.length}
+                    itemsPerPage={itemsPerPage}
+                    onPageChange={setCurrentPagePayments}
+                  />
+                </div>
+              </div>
             )}
           </div>
         </TabsContent>

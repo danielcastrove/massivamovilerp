@@ -1,15 +1,17 @@
 
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { CustomerTable } from "./CustomerTable";
+import { DataPagination } from "@/components/ui/data-pagination";
 import { CustomerFormModal } from "./CustomerFormModal"; // Import the modal
 import { CustomerDetailsModal } from "./CustomerDetailsModal"; // Import the details modal
 import { ContactModal } from "./ContactModal"; // Import the contact modal
+import BulkContactModal from "./BulkContactModal";
 import * as XLSX from 'xlsx';
-import { Download, RefreshCw, Filter } from "lucide-react";
+import { Download, RefreshCw, Filter, MessagesSquare } from "lucide-react";
 import { Spinner } from "@/components/ui/spinner";
 import {
   Select,
@@ -64,6 +66,7 @@ export interface Customer {
   porcent_retencion_municipio?: any;
   user_id?: string;
   servicios_contratados?: any[];
+  contactos_extra?: unknown;
 }
 
 export default function CustomerPageClient() {
@@ -82,6 +85,9 @@ export default function CustomerPageClient() {
   const [contactModalOpen, setContactModalOpen] = useState(false);
   const [contactChannel, setContactChannel] = useState<"SMS" | "WHATSAPP" | "EMAIL">("SMS");
   const [contactCustomer, setContactCustomer] = useState<Customer | undefined>(undefined);
+  const [isBulkContactOpen, setIsBulkContactOpen] = useState(false);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [itemsPerPage, setItemsPerPage] = useState(20);
 
   const fetchCustomers = async () => {
     setLoading(true);
@@ -133,6 +139,22 @@ export default function CustomerPageClient() {
 
     return true;
   });
+
+  // Resetear página cuando cambia la cantidad de resultados filtrados
+  const prevFilteredLengthRef = useRef(filteredCustomers.length);
+  useEffect(() => {
+    if (filteredCustomers.length !== prevFilteredLengthRef.current) {
+      prevFilteredLengthRef.current = filteredCustomers.length;
+      setCurrentPage(1); // eslint-disable-line react-hooks/set-state-in-effect -- Reset page when customer count changes
+    }
+  }, [filteredCustomers.length]);
+
+  const totalPages = Math.max(1, Math.ceil(filteredCustomers.length / itemsPerPage));
+  const safePage = Math.min(currentPage, totalPages);
+  const paginatedCustomers = filteredCustomers.slice(
+    (safePage - 1) * itemsPerPage,
+    safePage * itemsPerPage
+  );
 
   const handleCreateCustomer = () => {
     setSelectedCustomer(undefined);
@@ -226,6 +248,23 @@ export default function CustomerPageClient() {
     }
   };
 
+  const handleChangeStatus = async (customer: Customer, status: 'ACTIVE' | 'INACTIVE' | 'BLOCKED') => {
+    try {
+      const response = await fetch(`/api/customers/${customer.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status }),
+      });
+      if (!response.ok) {
+        const err = await response.json().catch(() => ({} as any));
+        throw new Error(err.message || 'No se pudo cambiar el estado del cliente');
+      }
+      fetchCustomers();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'An unknown error occurred');
+    }
+  };
+
   if (error) {
     return (
       <div className="p-6 text-center">
@@ -264,6 +303,15 @@ export default function CustomerPageClient() {
           </Select>
         </div>
         <div className="flex space-x-2">
+          <Button
+            onClick={() => setIsBulkContactOpen(true)}
+            variant="outline"
+            className="border-cyan-600 text-cyan-600 hover:bg-cyan-50"
+            disabled={filteredCustomers.length === 0 || loading}
+          >
+            <MessagesSquare className="h-4 w-4 mr-2" />
+            Mensaje General
+          </Button>
           <Button 
             onClick={handleExportExcel} 
             variant="outline" 
@@ -285,13 +333,49 @@ export default function CustomerPageClient() {
           <p className="text-slate-500 font-medium animate-pulse text-lg">Cargando datos de clientes...</p>
         </div>
       ) : (
-        <CustomerTable
-          customers={filteredCustomers}
-          onEdit={handleEditCustomer}
-          onDelete={handleDeleteCustomer}
-          onViewDetails={handleViewDetails}
-          onContact={handleContact}
-        />
+        <>
+          <CustomerTable
+            customers={paginatedCustomers}
+            onEdit={handleEditCustomer}
+            onDelete={handleDeleteCustomer}
+            onViewDetails={handleViewDetails}
+            onContact={handleContact}
+            onChangeStatus={handleChangeStatus}
+          />
+          {filteredCustomers.length > 0 && (
+            <div className="flex items-center gap-4 px-4 py-3 border-t border-slate-100">
+              <div className="flex items-center gap-2">
+                <span className="text-[11px] text-slate-500">Mostrar</span>
+                <Select
+                  value={String(itemsPerPage)}
+                  onValueChange={(v) => {
+                    setItemsPerPage(Number(v));
+                    setCurrentPage(1);
+                  }}
+                >
+                  <SelectTrigger className="h-8 w-[72px] text-xs">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="10">10</SelectItem>
+                    <SelectItem value="20">20</SelectItem>
+                    <SelectItem value="50">50</SelectItem>
+                    <SelectItem value="100">100</SelectItem>
+                  </SelectContent>
+                </Select>
+                <span className="text-[11px] text-slate-500">por página</span>
+              </div>
+              <div className="flex-1 min-w-0">
+                <DataPagination
+                  currentPage={safePage}
+                  totalItems={filteredCustomers.length}
+                  itemsPerPage={itemsPerPage}
+                  onPageChange={setCurrentPage}
+                />
+              </div>
+            </div>
+          )}
+        </>
       )}
 
       <CustomerFormModal
@@ -319,6 +403,14 @@ export default function CustomerPageClient() {
           onSuccess={fetchCustomers}
         />
       )}
+
+      <BulkContactModal
+        isOpen={isBulkContactOpen}
+        onClose={() => setIsBulkContactOpen(false)}
+        entities={filteredCustomers.map(c => ({ id: c.id, name: c.name }))}
+        apiEntity="customers"
+        destinos={["principal", "contacto", "cobranza"]}
+      />
 
       <AlertDialog open={isDeleteModalOpen} onOpenChange={setIsDeleteModalOpen}>
         <AlertDialogContent>

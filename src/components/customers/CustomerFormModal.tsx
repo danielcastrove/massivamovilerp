@@ -44,6 +44,13 @@ interface CustomerFormModalProps {
   customer?: Customer;
 }
 
+// Quita el prefijo +58 al cargar teléfonos desde la BD en edición (el prefijo se
+// muestra como bloque visual junto al input y el servidor lo vuelve a agregar al guardar).
+const strip58 = (value?: string | null): string => {
+  if (typeof value !== "string") return "";
+  return value.replace(/^\+58/, "").trim();
+};
+
 export function CustomerFormModal({ isOpen, onClose, onSuccess, customer }: CustomerFormModalProps) {
   const [step, setStep] = useState(0);
   const [isConflictStep, setIsConflictStep] = useState(false);
@@ -69,7 +76,7 @@ export function CustomerFormModal({ isOpen, onClose, onSuccess, customer }: Cust
       reseteado_sms: false,
       fecha_reseteado: "",
       cantidad_sms_antes_reset: 0,
-      recurrencia_compra_SMS: "MENSUAL",
+      recurrencia_compra_SMS: "BIMENSUAL",
       recurrencia_compra_whatsapp: "MENSUAL",
       taxType: "ORDINARY",
       isTaxExempt: false,
@@ -126,12 +133,6 @@ export function CustomerFormModal({ isOpen, onClose, onSuccess, customer }: Cust
   }, [address, isFiscalAddressAuto, form]);
 
   useEffect(() => {
-    if (customer) {
-      setIsFiscalAddressAuto(customer.direccion_fiscal === (customer as any).address);
-    }
-  }, [customer]);
-
-  useEffect(() => {
     if (sameAsContact) {
       const contactInfo = form.getValues("persona_contacto_info");
       form.setValue("persona_cobranza_info", contactInfo);
@@ -154,6 +155,9 @@ export function CustomerFormModal({ isOpen, onClose, onSuccess, customer }: Cust
 
   useEffect(() => {
     if (isOpen) {
+      // Vincular Dirección Fiscal ↔ Dirección Física cada vez que se abre el modal;
+      // se desenlaza solo si el usuario altera manualmente la dirección fiscal.
+      setIsFiscalAddressAuto(true);
       const fetchInitial = async () => {
         try {
           const [plRes, usersRes, bcvRes] = await Promise.all([
@@ -189,8 +193,28 @@ export function CustomerFormModal({ isOpen, onClose, onSuccess, customer }: Cust
           businessName: (customer as any).name,
           taxIdPrefix: (customer as any).tipo_doc_identidad,
           taxIdNumber: doc_parts[1] || (customer as any).doc_number,
-          phoneNumber: (customer as any).telefono_empresa?.replace('+58', '') || "",
-          telefono_celular: (customer as any).telefono_celular?.replace('+58', '') || "",
+          phoneNumber: strip58((customer as any).telefono_empresa),
+          telefono_celular: strip58((customer as any).telefono_celular),
+          persona_contacto_info: (customer as any).persona_contacto_info
+            ? {
+                ...(customer as any).persona_contacto_info,
+                telefono: strip58((customer as any).persona_contacto_info?.telefono),
+                telefono_celular: strip58((customer as any).persona_contacto_info?.telefono_celular),
+              }
+            : (customer as any).persona_contacto_info,
+          persona_cobranza_info: (customer as any).persona_cobranza_info
+            ? {
+                ...(customer as any).persona_cobranza_info,
+                telefono: strip58((customer as any).persona_cobranza_info?.telefono),
+                telefono_celular: strip58((customer as any).persona_cobranza_info?.telefono_celular),
+              }
+            : (customer as any).persona_cobranza_info,
+          representante_legal_info: (customer as any).representante_legal_info
+            ? {
+                ...(customer as any).representante_legal_info,
+                telefonoNumber: strip58((customer as any).representante_legal_info?.telefonoNumber),
+              }
+            : (customer as any).representante_legal_info,
           address: (customer as any).direccion_fiscal, 
           fiscalAddress: (customer as any).direccion_fiscal,
           taxType: (customer as any).settings?.taxType || "ORDINARY",
@@ -222,7 +246,7 @@ export function CustomerFormModal({ isOpen, onClose, onSuccess, customer }: Cust
           reseteado_sms: false,
           fecha_reseteado: "",
           cantidad_sms_antes_reset: 0,
-          recurrencia_compra_SMS: "MENSUAL",
+          recurrencia_compra_SMS: "BIMENSUAL",
           recurrencia_compra_whatsapp: "MENSUAL",
           taxType: "ORDINARY",
           isTaxExempt: false,
@@ -664,7 +688,7 @@ export function CustomerFormModal({ isOpen, onClose, onSuccess, customer }: Cust
                       )}
 
                       <FormField name="fiscalAddress" control={form.control} render={({ field }) => (
-                        <FormItem><FormLabel>Dirección Fiscal</FormLabel><FormControl><Textarea {...field} value={field.value ?? ""} onFocus={() => setIsFiscalAddressAuto(false)} /></FormControl></FormItem>
+                        <FormItem><FormLabel>Dirección Fiscal</FormLabel><FormControl><Textarea {...field} value={field.value ?? ""} onChange={(e) => { setIsFiscalAddressAuto(false); field.onChange(e); }} /></FormControl></FormItem>
                       )} />
                     </div>
                   )}

@@ -159,6 +159,7 @@ export default function UsersPageClient({ initialData }: UsersPageClientProps) {
   const [filterRole, setFilterRole] = useState<string>("ALL");
   const [filterStatus, setFilterStatus] = useState<string>("ALL");
   const [currentPage, setCurrentPage] = useState(1);
+  const [itemsPerPage, setItemsPerPage] = useState(ITEMS_PER_PAGE);
 
   const form = useForm<UserFormValues>({
     resolver: zodResolver(userFormSchema),
@@ -322,10 +323,13 @@ export default function UsersPageClient({ initialData }: UsersPageClientProps) {
     return matchesSearch && matchesRole && matchesStatus;
   });
 
+  const totalPages = Math.max(1, Math.ceil(filteredUsers.length / itemsPerPage));
+  const safePage = Math.min(currentPage, totalPages);
+
   const paginatedUsers = useMemo(() => {
-    const start = (currentPage - 1) * ITEMS_PER_PAGE;
-    return filteredUsers.slice(start, start + ITEMS_PER_PAGE);
-  }, [filteredUsers, currentPage]);
+    const start = (safePage - 1) * itemsPerPage;
+    return filteredUsers.slice(start, start + itemsPerPage);
+  }, [filteredUsers, safePage, itemsPerPage]);
 
   return (
     <Card className="border-slate-200 shadow-sm">
@@ -481,14 +485,39 @@ export default function UsersPageClient({ initialData }: UsersPageClientProps) {
               })}
             </TableBody>
           </Table>
-          {filteredUsers.length > ITEMS_PER_PAGE ? (
-            <DataPagination
-              currentPage={currentPage}
-              totalItems={filteredUsers.length}
-              itemsPerPage={ITEMS_PER_PAGE}
-              onPageChange={setCurrentPage}
-            />
-          ) : null}
+          {filteredUsers.length > 0 && (
+            <div className="flex items-center gap-4 px-4 py-3 border-t border-slate-100">
+              <div className="flex items-center gap-2">
+                <span className="text-[11px] text-slate-500">Mostrar</span>
+                <Select
+                  value={String(itemsPerPage)}
+                  onValueChange={(v) => {
+                    setItemsPerPage(Number(v));
+                    setCurrentPage(1);
+                  }}
+                >
+                  <SelectTrigger className="h-8 w-[72px] text-xs">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="10">10</SelectItem>
+                    <SelectItem value="20">20</SelectItem>
+                    <SelectItem value="50">50</SelectItem>
+                    <SelectItem value="100">100</SelectItem>
+                  </SelectContent>
+                </Select>
+                <span className="text-[11px] text-slate-500">por página</span>
+              </div>
+              <div className="flex-1 min-w-0">
+                <DataPagination
+                  currentPage={safePage}
+                  totalItems={filteredUsers.length}
+                  itemsPerPage={itemsPerPage}
+                  onPageChange={setCurrentPage}
+                />
+              </div>
+            </div>
+          )}
           </>
         )}
       </CardContent>

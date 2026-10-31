@@ -28,7 +28,8 @@ import {
   Filter,
   CalendarDays,
   X,
-  MessageSquare
+  MessageSquare,
+  MessagesSquare
 } from "lucide-react";
 import { 
   DropdownMenu, 
@@ -59,6 +60,7 @@ import { Badge } from "@/components/ui/badge";
 import { LeadFormModal } from "./LeadFormModal";
 import { LeadPdfButtons } from "./LeadPdfButtons";
 import { ContactModal, ContactEntity } from "@/components/customers/ContactModal";
+import BulkContactModal from "@/components/customers/BulkContactModal";
 import { DataPagination } from "@/components/ui/data-pagination";
 import { format, startOfDay, endOfDay } from "date-fns";
 import { es } from "date-fns/locale";
@@ -83,6 +85,7 @@ export interface Lead {
   tipo_lead: string;
   product?: { name: string };
   priceList?: { name: string };
+  contactos_extra?: unknown;
 }
 
 const statusConfig: Record<string, { label: string, color: string }> = {
@@ -105,6 +108,7 @@ export default function LeadsPageClient({ initialLeads = [] }: { initialLeads?: 
   const [filterStartDate, setFilterStartDate] = useState("");
   const [filterEndDate, setFilterEndDate] = useState("");
   const [currentPage, setCurrentPage] = useState(1);
+  const [itemsPerPage, setItemsPerPage] = useState(ITEMS_PER_PAGE);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [selectedLead, setSelectedLead] = useState<Lead | undefined>(undefined);
   const [isReadOnly, setIsReadOnly] = useState(false);
@@ -116,6 +120,7 @@ export default function LeadsPageClient({ initialLeads = [] }: { initialLeads?: 
   const [contactModalOpen, setContactModalOpen] = useState(false);
   const [contactChannel, setContactChannel] = useState<"SMS" | "WHATSAPP" | "EMAIL">("SMS");
   const [contactLead, setContactLead] = useState<ContactEntity | undefined>(undefined);
+  const [isBulkContactOpen, setIsBulkContactOpen] = useState(false);
 
   const fetchLeads = async () => {
     setLoading(true);
@@ -185,10 +190,13 @@ export default function LeadsPageClient({ initialLeads = [] }: { initialLeads?: 
     return result;
   }, [leads, searchTerm, typeFilter, statusFilter, filterStartDate, filterEndDate]);
 
+  const totalPages = Math.max(1, Math.ceil(filteredLeads.length / itemsPerPage));
+  const safePage = Math.min(currentPage, totalPages);
+
   const paginatedLeads = useMemo(() => {
-    const start = (currentPage - 1) * ITEMS_PER_PAGE;
-    return filteredLeads.slice(start, start + ITEMS_PER_PAGE);
-  }, [filteredLeads, currentPage]);
+    const start = (safePage - 1) * itemsPerPage;
+    return filteredLeads.slice(start, start + itemsPerPage);
+  }, [filteredLeads, safePage, itemsPerPage]);
 
   const handleNewLead = () => {
     setSelectedLead(undefined);
@@ -220,6 +228,7 @@ export default function LeadsPageClient({ initialLeads = [] }: { initialLeads?: 
       doc_number: lead.cedula || "—",
       email: lead.email,
       telefono_empresa: lead.telefono,
+      contactos_extra: lead.contactos_extra,
     });
     setContactChannel(channel);
     setContactModalOpen(true);
@@ -284,6 +293,14 @@ export default function LeadsPageClient({ initialLeads = [] }: { initialLeads?: 
           <p className="text-slate-500">Administre sus prospectos y oportunidades de venta.</p>
         </div>
         <div className="flex gap-2">
+          <Button
+            variant="outline"
+            onClick={() => setIsBulkContactOpen(true)}
+            className="border-cyan-600 text-cyan-600 hover:bg-cyan-50 gap-2"
+            disabled={filteredLeads.length === 0}
+          >
+            <MessagesSquare className="h-4 w-4" /> Mensaje General
+          </Button>
           <Button 
             variant="outline" 
             onClick={handleExportExcel} 
@@ -469,13 +486,38 @@ export default function LeadsPageClient({ initialLeads = [] }: { initialLeads?: 
             </TableBody>
           </Table>
         )}
-        {filteredLeads.length > ITEMS_PER_PAGE && (
-          <DataPagination
-            currentPage={currentPage}
-            totalItems={filteredLeads.length}
-            itemsPerPage={ITEMS_PER_PAGE}
-            onPageChange={setCurrentPage}
-          />
+        {!loading && filteredLeads.length > 0 && (
+          <div className="flex items-center gap-4 px-4 py-3 border-t border-slate-100">
+            <div className="flex items-center gap-2">
+              <span className="text-[11px] text-slate-500">Mostrar</span>
+              <Select
+                value={String(itemsPerPage)}
+                onValueChange={(v) => {
+                  setItemsPerPage(Number(v));
+                  setCurrentPage(1);
+                }}
+              >
+                <SelectTrigger className="h-8 w-[72px] text-xs">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="10">10</SelectItem>
+                  <SelectItem value="20">20</SelectItem>
+                  <SelectItem value="50">50</SelectItem>
+                  <SelectItem value="100">100</SelectItem>
+                </SelectContent>
+              </Select>
+              <span className="text-[11px] text-slate-500">por página</span>
+            </div>
+            <div className="flex-1 min-w-0">
+              <DataPagination
+                currentPage={safePage}
+                totalItems={filteredLeads.length}
+                itemsPerPage={itemsPerPage}
+                onPageChange={setCurrentPage}
+              />
+            </div>
+          </div>
         )}
       </div>
 
@@ -524,6 +566,14 @@ export default function LeadsPageClient({ initialLeads = [] }: { initialLeads?: 
           apiBase="/api/leads"
         />
       )}
+
+      <BulkContactModal
+        isOpen={isBulkContactOpen}
+        onClose={() => setIsBulkContactOpen(false)}
+        entities={filteredLeads.map(l => ({ id: l.id, name: `${l.nombre} ${l.apellido}`.trim() }))}
+        apiEntity="leads"
+        destinos={["principal"]}
+      />
     </div>
   );
 }

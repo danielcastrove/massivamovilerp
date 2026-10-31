@@ -1,7 +1,15 @@
 import { NextRequest, NextResponse } from "next/server";
+import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/db";
 import { auth } from "@/lib/auth";
 import { sendNotification } from "@/lib/notifications";
+import {
+  appendContactoExtra,
+  formatPhoneParaEnvio,
+  isValidEmail,
+  isValidPhone,
+  yaTieneContacto,
+} from "@/lib/contacts";
 
 export async function POST(
   req: NextRequest,
@@ -15,7 +23,7 @@ export async function POST(
 
     const { id } = await params;
     const body = await req.json();
-    const { channel, message, subject } = body;
+    const { channel, message, subject, to, save_contact } = body;
 
     if (!channel || !["SMS", "WHATSAPP", "EMAIL"].includes(channel)) {
       return NextResponse.json({ message: "Canal inválido." }, { status: 400 });
@@ -37,6 +45,22 @@ export async function POST(
       return NextResponse.json({ message: "El mensaje de WhatsApp no puede exceder 1000 caracteres." }, { status: 400 });
     }
 
+    let toOverride = "";
+    if (channel === "EMAIL" || channel === "SMS") {
+      if (to !== undefined && to !== null) {
+        if (typeof to !== "string" || to.trim().length === 0) {
+          return NextResponse.json({ message: "Destinatario inválido." }, { status: 400 });
+        }
+        if (channel === "EMAIL" && !isValidEmail(to)) {
+          return NextResponse.json({ message: "El correo electrónico no es válido." }, { status: 400 });
+        }
+        if (channel === "SMS" && !isValidPhone(to)) {
+          return NextResponse.json({ message: "El teléfono no es válido (7 a 15 dígitos)." }, { status: 400 });
+        }
+        toOverride = to.trim();
+      }
+    }
+
     const customer = await prisma.customer.findUnique({
       where: { id },
       select: {
@@ -45,6 +69,8 @@ export async function POST(
         telefono_empresa: true,
         telefono_celular: true,
         persona_contacto_info: true,
+        persona_cobranza_info: true,
+        contactos_extra: true,
       },
     });
 
@@ -54,7 +80,9 @@ export async function POST(
 
     let recipient = "";
 
-    if (channel === "SMS" || channel === "WHATSAPP") {
+    if (toOverride) {
+      recipient = toOverride;
+    } else if (channel === "SMS" || channel === "WHATSAPP") {
       recipient = customer.telefono_empresa || customer.telefono_celular || "";
       if (!recipient) {
         const contactInfo = customer.persona_contacto_info as any;
@@ -66,9 +94,7 @@ export async function POST(
           { status: 400 }
         );
       }
-    }
-
-    if (channel === "EMAIL") {
+    } else if (channel === "EMAIL") {
       recipient = customer.email || "";
       if (!recipient) {
         const contactInfo = customer.persona_contacto_info as any;
@@ -80,6 +106,10 @@ export async function POST(
           { status: 400 }
         );
       }
+    }
+
+    if (channel === "SMS" || channel === "WHATSAPP") {
+      recipient = formatPhoneParaEnvio(recipient);
     }
 
     const result = await sendNotification({
@@ -97,9 +127,28 @@ export async function POST(
       );
     }
 
+    let contactoGuardado = false;
+    if ((channel === "EMAIL" || channel === "SMS") && save_contact === true && toOverride) {
+      const tipo = channel === "EMAIL" ? ("EMAIL" as const) : ("PHONE" as const);
+      const esNuevo = !yaTieneContacto(customer.contactos_extra, tipo, toOverride, [
+        customer.email,
+        customer.telefono_empresa,
+        customer.telefono_celular,
+      ]);
+      if (esNuevo) {
+        const nuevos = appendContactoExtra(customer.contactos_extra, tipo, toOverride);
+        await prisma.customer.update({
+          where: { id },
+          data: { contactos_extra: nuevos as unknown as Prisma.InputJsonValue },
+        });
+        contactoGuardado = true;
+      }
+    }
+
     return NextResponse.json({
       message: `${channel} enviado exitosamente a ${recipient}`,
       recipient,
+      contacto_guardado: contactoGuardado,
     });
   } catch (e: any) {
     console.error("Contact error:", e);

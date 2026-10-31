@@ -76,6 +76,7 @@ export default async function EditarFacturaPage({ params }: PageProps) {
     id: invoice.id,
     customerId: invoice.customer_id,
     type: invoice.type,
+    issue_date: invoice.issue_date.toISOString().split('T')[0],
     due_date: invoice.due_date.toISOString().split('T')[0],
     invoice_number: invoice.invoice_number ?? undefined,
     control_number: invoice.control_number ?? undefined,

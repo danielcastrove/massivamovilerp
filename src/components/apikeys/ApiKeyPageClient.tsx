@@ -39,6 +39,14 @@ import {
 } from "@/components/ui/alert-dialog";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { DataPagination } from "@/components/ui/data-pagination";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import {
   Key,
   Plus,
@@ -53,6 +61,7 @@ import {
   Shield,
   ChevronDown,
   ChevronRight,
+  Trash2,
 } from "lucide-react";
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
@@ -113,16 +122,37 @@ const AVAILABLE_ENDPOINTS = [
   },
 ];
 
+const parseEndpoint = (ep: string): { method: HttpMethod | null; path: string } => {
+  const i = ep.indexOf(":");
+  return i >= 0
+    ? { method: ep.slice(0, i) as HttpMethod, path: ep.slice(i + 1) }
+    : { method: null, path: ep };
+};
+
+const methodBadgeClass = (method: HttpMethod | null) =>
+  method === "GET"
+    ? "bg-emerald-50 text-emerald-700"
+    : method === "POST"
+      ? "bg-blue-50 text-blue-700"
+      : method === "PUT"
+        ? "bg-amber-50 text-amber-700"
+        : method === "DELETE"
+          ? "bg-red-50 text-red-700"
+          : "bg-violet-50 text-violet-700";
+
 export default function ApiKeyPageClient({ initialApiKeys }: ApiKeyPageClientProps) {
   const [apiKeys, setApiKeys] = useState<ApiKeyRecord[]>(initialApiKeys);
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [isEditOpen, setIsEditOpen] = useState(false);
   const [isViewOpen, setIsViewOpen] = useState(false);
   const [isRevokeOpen, setIsRevokeOpen] = useState(false);
+  const [isDeleteOpen, setIsDeleteOpen] = useState(false);
   const [selectedKey, setSelectedKey] = useState<ApiKeyRecord | null>(null);
   const [newRawKey, setNewRawKey] = useState("");
   const [copied, setCopied] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [itemsPerPage, setItemsPerPage] = useState(20);
 
   // Form state
   const [formName, setFormName] = useState("");
@@ -261,6 +291,26 @@ export default function ApiKeyPageClient({ initialApiKeys }: ApiKeyPageClientPro
     setIsCreateOpen(true);
   };
 
+  const handleDelete = async () => {
+    if (!selectedKey) return;
+
+    setLoading(true);
+    try {
+      const res = await fetch(`/api/apikeys/${selectedKey.id}`, { method: "DELETE" });
+
+      if (res.ok) {
+        const id = selectedKey.id;
+        setApiKeys((prev) => prev.filter((k) => k.id !== id));
+        setIsDeleteOpen(false);
+        setSelectedKey(null);
+      }
+    } catch (e) {
+      console.error("Error deleting API key:", e);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const copyToClipboard = (text: string) => {
     navigator.clipboard.writeText(text);
     setCopied(true);
@@ -309,6 +359,13 @@ export default function ApiKeyPageClient({ initialApiKeys }: ApiKeyPageClientPro
     return new Date(expiresAt) < new Date();
   };
 
+  const totalPages = Math.max(1, Math.ceil(apiKeys.length / itemsPerPage));
+  const safePage = Math.min(currentPage, totalPages);
+  const paginatedKeys = apiKeys.slice(
+    (safePage - 1) * itemsPerPage,
+    safePage * itemsPerPage
+  );
+
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -350,7 +407,7 @@ export default function ApiKeyPageClient({ initialApiKeys }: ApiKeyPageClientPro
                   </TableCell>
                 </TableRow>
               ) : (
-                apiKeys.map((key) => (
+                paginatedKeys.map((key) => (
                   <TableRow key={key.id} className="hover:bg-slate-50/50">
                     <TableCell className="font-medium text-sm">{key.name}</TableCell>
                     <TableCell>
@@ -365,20 +422,9 @@ export default function ApiKeyPageClient({ initialApiKeys }: ApiKeyPageClientPro
                     <TableCell>
                       <div className="flex flex-wrap gap-1">
                         {key.allowed_endpoints.slice(0, 3).map((ep) => {
-                          const method = ep.includes(":") ? ep.split(":")[0] : null;
-                          const path = ep.includes(":") ? ep.split(":")[1] : ep;
-                          const color =
-                            method === "GET"
-                              ? "bg-emerald-50 text-emerald-700"
-                              : method === "POST"
-                                ? "bg-blue-50 text-blue-700"
-                                : method === "PUT"
-                                  ? "bg-amber-50 text-amber-700"
-                                  : method === "DELETE"
-                                    ? "bg-red-50 text-red-700"
-                                    : "bg-violet-50 text-violet-700";
+                          const { method, path } = parseEndpoint(ep);
                           return (
-                            <Badge key={ep} className={`${color} text-[8px] font-mono`}>
+                            <Badge key={ep} className={`${methodBadgeClass(method)} text-[8px] font-mono`}>
                               {method ? `${method} ${path}` : path}
                             </Badge>
                           );
@@ -446,6 +492,15 @@ export default function ApiKeyPageClient({ initialApiKeys }: ApiKeyPageClientPro
                           >
                             <Ban className="mr-2 h-4 w-4" /> Revocar
                           </DropdownMenuItem>
+                          <DropdownMenuItem
+                            onClick={() => {
+                              setSelectedKey(key);
+                              setIsDeleteOpen(true);
+                            }}
+                            className="cursor-pointer text-red-600"
+                          >
+                            <Trash2 className="mr-2 h-4 w-4" /> Eliminar
+                          </DropdownMenuItem>
                         </DropdownMenuContent>
                       </DropdownMenu>
                     </TableCell>
@@ -454,6 +509,39 @@ export default function ApiKeyPageClient({ initialApiKeys }: ApiKeyPageClientPro
               )}
             </TableBody>
           </Table>
+          {apiKeys.length > 0 && (
+            <div className="flex items-center gap-4 px-4 py-3 border-t border-slate-100">
+              <div className="flex items-center gap-2">
+                <span className="text-[11px] text-slate-500">Mostrar</span>
+                <Select
+                  value={String(itemsPerPage)}
+                  onValueChange={(v) => {
+                    setItemsPerPage(Number(v));
+                    setCurrentPage(1);
+                  }}
+                >
+                  <SelectTrigger className="h-8 w-[72px] text-xs">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="10">10</SelectItem>
+                    <SelectItem value="20">20</SelectItem>
+                    <SelectItem value="50">50</SelectItem>
+                    <SelectItem value="100">100</SelectItem>
+                  </SelectContent>
+                </Select>
+                <span className="text-[11px] text-slate-500">por página</span>
+              </div>
+              <div className="flex-1 min-w-0">
+                <DataPagination
+                  currentPage={safePage}
+                  totalItems={apiKeys.length}
+                  itemsPerPage={itemsPerPage}
+                  onPageChange={setCurrentPage}
+                />
+              </div>
+            </div>
+          )}
         </CardContent>
       </Card>
 
@@ -593,7 +681,7 @@ export default function ApiKeyPageClient({ initialApiKeys }: ApiKeyPageClientPro
         </DialogContent>
       </Dialog>
 
-      {/* View Dialog — shows raw key on creation */}
+      {/* View Dialog  Eshows raw key on creation */}
       <Dialog open={isViewOpen} onOpenChange={(open) => {
         if (!open) {
           setIsViewOpen(false);
@@ -636,20 +724,9 @@ export default function ApiKeyPageClient({ initialApiKeys }: ApiKeyPageClientPro
                 <p><strong>Endpoints:</strong></p>
                 <div className="flex flex-wrap gap-1 ml-4">
                   {selectedKey.allowed_endpoints.map((ep) => {
-                    const method = ep.includes(":") ? ep.split(":")[0] : null;
-                    const path = ep.includes(":") ? ep.split(":")[1] : ep;
-                    const color =
-                      method === "GET"
-                        ? "bg-emerald-50 text-emerald-700"
-                        : method === "POST"
-                          ? "bg-blue-50 text-blue-700"
-                          : method === "PUT"
-                            ? "bg-amber-50 text-amber-700"
-                            : method === "DELETE"
-                              ? "bg-red-50 text-red-700"
-                              : "bg-violet-50 text-violet-700";
+                    const { method, path } = parseEndpoint(ep);
                     return (
-                      <Badge key={ep} className={`${color} text-[9px] font-mono`}>
+                      <Badge key={ep} className={`${methodBadgeClass(method)} text-[9px] font-mono`}>
                         {method ? `${method} ${path}` : path}
                       </Badge>
                     );
@@ -683,6 +760,31 @@ export default function ApiKeyPageClient({ initialApiKeys }: ApiKeyPageClientPro
               disabled={loading}
             >
               {loading ? "Revocando..." : "Revocar"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Delete Confirmation */}
+      <AlertDialog open={isDeleteOpen} onOpenChange={(open) => {
+        setIsDeleteOpen(open);
+        if (!open) setSelectedKey(null);
+      }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>¿Eliminar esta API key?</AlertDialogTitle>
+            <AlertDialogDescription>
+              La API key se eliminará permanentemente junto con sus permisos. Esta acción no se puede deshacer.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleDelete}
+              className="bg-red-500 hover:bg-red-600 text-white"
+              disabled={loading}
+            >
+              {loading ? "Eliminando..." : "Eliminar"}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

@@ -65,6 +65,7 @@ export function ServicesTab() {
 
   const ITEMS_PER_PAGE = 20;
   const [currentPage, setCurrentPage] = useState(1);
+  const [itemsPerPage, setItemsPerPage] = useState(ITEMS_PER_PAGE);
 
   // State for Export Modal
   const [isExportModalOpen, setIsExportModalOpen] = useState(false);
@@ -199,10 +200,13 @@ export function ServicesTab() {
     });
   }, [products, typeFilter, categoryFilter, searchTerm]);
 
+  const totalPages = Math.max(1, Math.ceil(filteredProducts.length / itemsPerPage));
+  const safePage = Math.min(currentPage, totalPages);
+
   const paginatedProducts = useMemo(() => {
-    const start = (currentPage - 1) * ITEMS_PER_PAGE;
-    return filteredProducts.slice(start, start + ITEMS_PER_PAGE);
-  }, [filteredProducts, currentPage]);
+    const start = (safePage - 1) * itemsPerPage;
+    return filteredProducts.slice(start, start + itemsPerPage);
+  }, [filteredProducts, safePage, itemsPerPage]);
 
 
 
@@ -378,13 +382,38 @@ export function ServicesTab() {
               </TableBody>
             </Table>
           )}
-          {filteredProducts.length > ITEMS_PER_PAGE && (
-            <DataPagination
-              currentPage={currentPage}
-              totalItems={filteredProducts.length}
-              itemsPerPage={ITEMS_PER_PAGE}
-              onPageChange={setCurrentPage}
-            />
+          {filteredProducts.length > 0 && (
+            <div className="flex items-center gap-4 px-4 py-3 border-t border-slate-100">
+              <div className="flex items-center gap-2">
+                <span className="text-[11px] text-slate-500">Mostrar</span>
+                <Select
+                  value={String(itemsPerPage)}
+                  onValueChange={(v) => {
+                    setItemsPerPage(Number(v));
+                    setCurrentPage(1);
+                  }}
+                >
+                  <SelectTrigger className="h-8 w-[72px] text-xs">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="10">10</SelectItem>
+                    <SelectItem value="20">20</SelectItem>
+                    <SelectItem value="50">50</SelectItem>
+                    <SelectItem value="100">100</SelectItem>
+                  </SelectContent>
+                </Select>
+                <span className="text-[11px] text-slate-500">por página</span>
+              </div>
+              <div className="flex-1 min-w-0">
+                <DataPagination
+                  currentPage={safePage}
+                  totalItems={filteredProducts.length}
+                  itemsPerPage={itemsPerPage}
+                  onPageChange={setCurrentPage}
+                />
+              </div>
+            </div>
           )}
         </CardContent>
       </Card>
