@@ -27,6 +27,7 @@ export async function POST(req: Request) {
       currencyMode,
       due_date,
       issue_date,
+      proximo_vencimiento_producto,
       invoice_number,
       control_number 
     } = body;
@@ -38,6 +39,40 @@ export async function POST(req: Request) {
 
     if (!customer) {
       return NextResponse.json({ message: "Cliente no encontrado" }, { status: 404 });
+    }
+
+    // Clientes inactivos o bloqueados no pueden recibir facturas nuevas
+    if (customer.status === "INACTIVE" || customer.status === "BLOCKED") {
+      return NextResponse.json(
+        { message: `No se puede crear una factura: el cliente está ${customer.status === "INACTIVE" ? "inactivo" : "bloqueado"}` },
+        { status: 403 }
+      );
+    }
+
+    // Determinar Fecha de Emisión y Vencimiento (validaciones antes de la transacción)
+    const issueDate = issue_date ? new Date(issue_date) : new Date();
+    const dueDate = due_date ? new Date(due_date) : new Date();
+    if (!due_date) dueDate.setDate(issueDate.getDate() + 30);
+
+    // Validación: due_date no puede ser anterior a issue_date
+    if (dueDate < issueDate) {
+      return NextResponse.json(
+        { message: "La fecha de vencimiento no puede ser anterior a la fecha de emisión" },
+        { status: 400 }
+      );
+    }
+
+    // Vencimiento de la Factura: si lo envía el cliente se respeta; si no, se calcula
+    // desde el ciclo de facturación de los productos (mínimo 30 días)
+    let proximoVencimientoBody: Date | undefined;
+    if (proximo_vencimiento_producto) {
+      proximoVencimientoBody = new Date(proximo_vencimiento_producto);
+      if (proximoVencimientoBody < issueDate) {
+        return NextResponse.json(
+          { message: "La fecha de vencimiento de la factura no puede ser anterior a la fecha de emisión" },
+          { status: 400 }
+        );
+      }
     }
 
     // 2. Transacción para asegurar integridad
@@ -116,21 +151,7 @@ export async function POST(req: Request) {
       
       // ... (Creación del documento) ...
 
-
-      // Determinar Fecha de Emisión y Vencimiento
-      const issueDate = issue_date ? new Date(issue_date) : new Date();
-      const dueDate = due_date ? new Date(due_date) : new Date();
-      if (!due_date) dueDate.setDate(issueDate.getDate() + 30);
-
-      // Validación: due_date no puede ser anterior a issue_date
-      if (dueDate < issueDate) {
-        return NextResponse.json(
-          { message: "La fecha de vencimiento no puede ser anterior a la fecha de emisión" },
-          { status: 400 }
-        );
-      }
-
-      // 3. Buscar productos para calcular proximo_vencimiento_producto
+      // 3. Buscar productos para calcular proximo_vencimiento_producto (fallback)
       const products = await tx.product.findMany({
         where: { id: { in: items.map((i: any) => i.productId) } }
       });
@@ -139,7 +160,7 @@ export async function POST(req: Request) {
         ...products.map(p => getBillingCycleDays(p.billing_cycle)),
         30
       );
-      const proximoVencimiento = addDays(issueDate, maxBillingDays);
+      const proximoVencimiento = proximoVencimientoBody ?? addDays(issueDate, maxBillingDays);
 
       // 4. Crear la Factura
       const newInvoice = await tx.invoice.create({
@@ -196,12 +217,26 @@ export async function POST(req: Request) {
 export async function GET(request: Request) {
   return withApiKeyAuth(request, async (ctx) => {
     try {
+      let where: Prisma.InvoiceWhereInput | undefined;
+
       if (!ctx?.fromApiKey) {
         const session = ctx?.session ?? await auth();
         if (!session) return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
+
+        // CLIENTE: solo sus facturas (sin borradores); sin customer vinculado → lista vacía
+        if (session.user.role === "CLIENTE") {
+          const customer = await prisma.customer.findUnique({
+            where: { user_id: session.user.id },
+            select: { id: true },
+          });
+          where = customer
+            ? { customer_id: customer.id, status: { notIn: ["DRAFT"] } }
+            : { customer_id: { in: [] } };
+        }
       }
 
       const invoices = await prisma.invoice.findMany({
+        where,
         include: {
           customer: {
             include: {

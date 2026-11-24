@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
 import { sendNotification } from '@/lib/notifications';
+import { buildBrandEmail, emailMessageToHtml } from '@/lib/email-templates';
 import { differenceInCalendarDays, startOfDay, endOfDay } from 'date-fns';
 
 export const dynamic = 'force-dynamic';
@@ -62,14 +63,16 @@ export async function GET() {
 
       const productName = invoice.invoice_items[0]?.product?.name || invoice.invoice_items[0]?.custom_name || 'Servicio';
       const venceStr = expirationDate.toLocaleDateString('es-VE', { timeZone: 'UTC' });
+      // Nombre del cliente en el mensaje: máximo 15 caracteres, seguido de ":"
+      const nombreMensaje = (customer.name || '').slice(0, 15);
 
       let message: string;
       if (daysDiff > 0) {
-        message = `Hola ${customer.name}, su servicio "${productName}" vence el ${venceStr} (faltan ${daysDiff} día(s)). Comuníquese con nosotros para renovarlo.`;
+        message = `Hola ${nombreMensaje}: su servicio "${productName}" vence el ${venceStr} (faltan ${daysDiff} día(s)). Comuníquese con nosotros para renovarlo.`;
       } else if (daysDiff === 0) {
-        message = `Hola ${customer.name}, su servicio "${productName}" vence HOY (${venceStr}). Comuníquese con nosotros para renovarlo.`;
+        message = `Hola ${nombreMensaje}: su servicio "${productName}" vence HOY (${venceStr}). Comuníquese con nosotros para renovarlo.`;
       } else {
-        message = `Hola ${customer.name}, su servicio "${productName}" venció el ${venceStr} (hace ${Math.abs(daysDiff)} día(s)). Renueve para no interrumpir su servicio.`;
+        message = `Hola ${nombreMensaje}: su servicio "${productName}" venció el ${venceStr} (hace ${Math.abs(daysDiff)} día(s)). Renueve para mantener el servicio.`;
       }
 
       const phone = customer.telefono_empresa || customer.telefono_celular;
@@ -78,7 +81,18 @@ export async function GET() {
 
       const sentSms = phone ? !!(await sendNotification({ to: phone, customerName, message, type: 'SMS' })) : false;
       const sentWhatsApp = phone ? !!(await sendNotification({ to: phone, customerName, message, type: 'WHATSAPP' })) : false;
-      const sentEmail = email ? !!(await sendNotification({ to: email, customerName, message: `<p>${message}</p>`, type: 'EMAIL', subject: 'Recordatorio de Vencimiento - MassivaMovil' })) : false;
+      const sentEmail = email
+        ? !!(await sendNotification({
+            to: email,
+            customerName,
+            message: buildBrandEmail({
+              type: 'service_reminder',
+              bodyHtml: emailMessageToHtml(message),
+            }),
+            type: 'EMAIL',
+            subject: 'Recordatorio de Vencimiento - MassivaMovil',
+          }))
+        : false;
 
       results.push({ customerName: customer.name || '', vence: venceStr, diasParaVencer: daysDiff, sms: sentSms, whatsapp: sentWhatsApp, email: sentEmail });
     }

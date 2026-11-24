@@ -1,25 +1,40 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
+import { prisma } from "@/lib/db";
 import { validateApiKey, isEndpointAllowed, type HttpMethod } from "@/lib/apikey-auth";
 import type { Session } from "next-auth";
 
-const rateLimitMap = new Map<string, { count: number; resetAt: number }>();
+const WINDOW_MS = 60_000;
 
-function checkRateLimit(keyId: string, limit: number): boolean {
-  const now = Date.now();
-  const entry = rateLimitMap.get(keyId);
+function currentWindowStart(): Date {
+  return new Date(Math.floor(Date.now() / WINDOW_MS) * WINDOW_MS);
+}
 
-  if (!entry || now > entry.resetAt) {
-    rateLimitMap.set(keyId, { count: 1, resetAt: now + 60_000 });
+/**
+ * Fixed-window rate limit persisted in Postgres (ApiKeyRateLimit table).
+ * The upsert is atomic (count increment), so the limit holds across
+ * serverless instances and process restarts.
+ * Returns true if the request is allowed.
+ */
+export async function checkRateLimit(keyId: string, limit: number): Promise<boolean> {
+  const windowStart = currentWindowStart();
+
+  try {
+    const row = await prisma.apiKeyRateLimit.upsert({
+      where: {
+        key_id_window_start: { key_id: keyId, window_start: windowStart },
+      },
+      create: { key_id: keyId, window_start: windowStart, count: 1 },
+      update: { count: { increment: 1 } },
+      select: { count: true },
+    });
+
+    return row.count <= limit;
+  } catch (error) {
+    // Fail open: never break the API because of rate-limit storage issues
+    console.error("Rate limit check failed, allowing request:", error);
     return true;
   }
-
-  if (entry.count >= limit) {
-    return false;
-  }
-
-  entry.count++;
-  return true;
 }
 
 export interface AuthContext {
@@ -64,7 +79,7 @@ export async function withApiKeyAuth(
   }
 
   if (validation.rateLimit && validation.keyId) {
-    if (!checkRateLimit(validation.keyId, validation.rateLimit)) {
+    if (!(await checkRateLimit(validation.keyId, validation.rateLimit))) {
       return NextResponse.json(
         { message: "Límite de solicitudes excedido" },
         { status: 429 }

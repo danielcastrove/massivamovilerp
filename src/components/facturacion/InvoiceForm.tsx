@@ -16,7 +16,8 @@ import {
   Tags,
   ChevronLeft,
   Save,
-  LayoutGrid
+  LayoutGrid,
+  CircleAlert
 } from "lucide-react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
@@ -41,10 +42,18 @@ import {
 } from "@/components/ui/select";
 import { Card, CardContent } from "@/components/ui/card";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { Separator } from "@/components/ui/separator";
+// import { Separator } from "@/components/ui/separator";
 import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+} from "@/components/ui/dialog";
 
 // --- Validation Schema ---
 const invoiceItemSchema = z.object({
@@ -65,7 +74,8 @@ const invoiceFormSchema = z.object({
   type: z.enum(["FACTURA", "RECIBO"]),
   currencyMode: z.enum(["USD_BS", "USD_ONLY"]).default("USD_BS"),
   issueDate: z.string().min(1, "Fecha de emisión requerida"),
-  dueDate: z.string().min(1, "Fecha requerida"),
+  serviceDueDate: z.string().min(1, "Fecha requerida"),
+  proximoVencimiento: z.string().min(1, "Fecha requerida"),
   invoiceNumber: z.number().optional(),
   controlNumber: z.number().optional(),
   applyIgtf: z.boolean().default(false),
@@ -104,7 +114,8 @@ const DEFAULT_FORM_VALUES: InvoiceFormValues = {
   type: "FACTURA",
   currencyMode: "USD_BS",
   issueDate: new Date().toISOString().split('T')[0],
-  dueDate: sumarMesesISO(new Date().toISOString().split('T')[0], 1),
+  serviceDueDate: sumarMesesISO(new Date().toISOString().split('T')[0], 1),
+  proximoVencimiento: sumarMesesISO(new Date().toISOString().split('T')[0], 1),
   invoiceNumber: undefined,
   controlNumber: undefined,
   applyIgtf: false,
@@ -122,6 +133,7 @@ interface InvoiceFormProps {
     currency_mode?: string;
     issue_date?: string;
     due_date?: string;
+    proximo_vencimiento_producto?: string;
     invoice_number?: number;
     control_number?: number;
     items: any[];
@@ -143,6 +155,7 @@ export default function InvoiceForm({
     isEditing ? initialCustomers.find(c => c.id === initialInvoiceData.customerId) : null
   );
   const [loading, setLoading] = useState(false);
+  const [errorModal, setErrorModal] = useState<{ title: string; message: string } | null>(null);
   // Cache de productos por lista de precios para evitar fetchings repetitivos
   const [pricesCache, setPricesCache] = useState<Record<string, any[]>>({});
 
@@ -152,7 +165,8 @@ export default function InvoiceForm({
       customerId: initialInvoiceData.customerId,
       type: initialInvoiceData.type as any,
       issueDate: initialInvoiceData.issue_date || new Date().toISOString().split('T')[0],
-      dueDate: initialInvoiceData.due_date || new Date().toISOString().split('T')[0],
+      serviceDueDate: initialInvoiceData.due_date || new Date().toISOString().split('T')[0],
+      proximoVencimiento: initialInvoiceData.proximo_vencimiento_producto || initialInvoiceData.due_date || new Date().toISOString().split('T')[0],
       invoiceNumber: initialInvoiceData.invoice_number,
       controlNumber: initialInvoiceData.control_number,
       applyIgtf: (initialInvoiceData as any).applyIgtf || false,
@@ -201,6 +215,7 @@ export default function InvoiceForm({
 
   // Vencimiento automático: derivado del ciclo de facturación (billing_cycle) de los productos de la factura.
   // Se salta el primer render para no pisar las fechas cargadas al editar una factura existente.
+  // Aplica a ambos campos (Vencimiento de Servicio = due_date, Vencimiento de la Factura = proximo_vencimiento_producto).
   const fechasCalculadas = useRef(false);
   useEffect(() => {
     if (!fechasCalculadas.current) {
@@ -208,12 +223,20 @@ export default function InvoiceForm({
       return;
     }
     const meses = mesesMaximosDeItems(watchedItems, pricesCache);
-    const actual = form.getValues("dueDate");
+    const actualServicio = form.getValues("serviceDueDate");
+    const actualFactura = form.getValues("proximoVencimiento");
     if (meses && watchedIssueDate) {
-      form.setValue("dueDate", sumarMesesISO(watchedIssueDate, meses), { shouldValidate: true, shouldDirty: true });
-    } else if (actual && watchedIssueDate && actual < watchedIssueDate) {
+      const valor = sumarMesesISO(watchedIssueDate, meses);
+      form.setValue("serviceDueDate", valor, { shouldValidate: true, shouldDirty: true });
+      form.setValue("proximoVencimiento", valor, { shouldValidate: true, shouldDirty: true });
+    } else if (watchedIssueDate) {
       // Sin ciclo definido: al menos evitar un vencimiento anterior a la emisión
-      form.setValue("dueDate", watchedIssueDate, { shouldValidate: true, shouldDirty: true });
+      if (actualServicio && actualServicio < watchedIssueDate) {
+        form.setValue("serviceDueDate", watchedIssueDate, { shouldValidate: true, shouldDirty: true });
+      }
+      if (actualFactura && actualFactura < watchedIssueDate) {
+        form.setValue("proximoVencimiento", watchedIssueDate, { shouldValidate: true, shouldDirty: true });
+      }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [claveProductos, watchedIssueDate]);
@@ -349,7 +372,8 @@ export default function InvoiceForm({
       const payload = { 
         ...values, 
         issue_date: values.issueDate ? `${values.issueDate}T12:00:00` : null,
-        due_date: values.dueDate ? `${values.dueDate}T12:00:00` : null,
+        due_date: values.serviceDueDate ? `${values.serviceDueDate}T12:00:00` : null,
+        proximo_vencimiento_producto: values.proximoVencimiento ? `${values.proximoVencimiento}T12:00:00` : null,
         currency_mode: values.currencyMode,
         invoice_number: values.invoiceNumber,
         control_number: values.controlNumber,
@@ -375,12 +399,18 @@ export default function InvoiceForm({
         router.push("/dashboard/facturacion");
         router.refresh();
       } else {
-        const errorData = await response.json();
-        alert(`Error al procesar el documento: ${errorData.error || 'Desconocido'}`);
+        const errorData = await response.json().catch(() => null);
+        setErrorModal({
+          title: "No se pudo procesar el documento",
+          message: errorData?.message || errorData?.error || "El servidor no devolvió detalle del error",
+        });
       }
     } catch (error) {
       console.error("Submit error:", error);
-      alert("Error de red al procesar el documento");
+      setErrorModal({
+        title: "No se pudo procesar el documento",
+        message: "Error de red al procesar el documento",
+      });
     } finally {
       setLoading(false);
     }
@@ -430,9 +460,12 @@ export default function InvoiceForm({
                         <Select onValueChange={(v) => { field.onChange(v); handleCustomerChange(v); }} value={field.value} disabled={isEditing}>
                           <FormControl><SelectTrigger className="border-slate-200 h-11"><SelectValue placeholder="Busque un cliente..." /></SelectTrigger></FormControl>
                           <SelectContent>
-                            {initialCustomers.map((c) => (
-                              <SelectItem key={c.id} value={c.id}>{c.name} ({c.doc_number})</SelectItem>
-                            ))}
+                            {/* Solo clientes activos; al editar se conserva el cliente de la factura aunque esté inactivo/bloqueado */}
+                            {initialCustomers
+                              .filter((c) => c.status === "ACTIVE" || c.id === initialInvoiceData?.customerId)
+                              .map((c) => (
+                                <SelectItem key={c.id} value={c.id}>{c.name} ({c.doc_number})</SelectItem>
+                              ))}
                           </SelectContent>
                         </Select>
                         <FormMessage />
@@ -476,7 +509,8 @@ export default function InvoiceForm({
                     />
                   )}
 
-                  {/* Fechas del Documento: Emisión (editable) y Vencimiento (automático según ciclo de los productos, editable) */}
+                  {/* Fechas del Documento: Emisión (editable), Vencimiento de la Factura y Vencimiento de Servicio
+                      (automáticos según ciclo de los productos, editables) */}
                   <FormField
                     control={form.control}
                     name="issueDate"
@@ -492,10 +526,28 @@ export default function InvoiceForm({
                   />
                   <FormField
                     control={form.control}
-                    name="dueDate"
+                    name="proximoVencimiento"
                     render={({ field }) => (
                       <FormItem>
                         <FormLabel className="text-xs font-bold uppercase text-slate-400">Vencimiento de la Factura</FormLabel>
+                        <FormControl>
+                          <Input
+                            type="date"
+                            className="border-slate-200 h-11"
+                            min={watchedIssueDate || undefined}
+                            {...field}
+                          />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={form.control}
+                    name="serviceDueDate"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel className="text-xs font-bold uppercase text-slate-400">Vencimiento de Servicio</FormLabel>
                         <FormControl>
                           <Input
                             type="date"
@@ -845,6 +897,30 @@ export default function InvoiceForm({
           </div>
         </form>
       </Form>
+
+      {/* Modal de error del envío (reemplaza los alert) */}
+      <Dialog open={!!errorModal} onOpenChange={(open) => { if (!open) setErrorModal(null); }}>
+        <DialogContent className="border-t-4 border-t-red-500 sm:max-w-[440px]">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-slate-900">
+              <CircleAlert className="h-5 w-5 text-red-600 shrink-0" />
+              {errorModal?.title}
+            </DialogTitle>
+            <DialogDescription className="text-slate-600">
+              {errorModal?.message}
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button
+              type="button"
+              onClick={() => setErrorModal(null)}
+              className="bg-slate-900 hover:bg-slate-800 text-white font-bold"
+            >
+              Entendido
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

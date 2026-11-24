@@ -33,11 +33,12 @@ jest.mock('@/lib/db', () => {
     parametro: {
       findUnique: jest.fn(),
     },
-    $transaction: jest.fn(async (callback) => {
-      // For testing, we can pass the same mockPrisma as the transaction client
-      return callback(mockPrisma);
-    }),
+    $transaction: jest.fn(),
   };
+  mockPrisma.$transaction.mockImplementation(async (callback: (client: typeof mockPrisma) => Promise<unknown>) => {
+    // For testing, we can pass the same mockPrisma as the transaction client
+    return callback(mockPrisma);
+  });
   return { prisma: mockPrisma };
 });
 

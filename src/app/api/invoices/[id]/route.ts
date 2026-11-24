@@ -10,6 +10,9 @@ export async function PUT(
     if (!ctx?.fromApiKey && !ctx?.session) {
       return new NextResponse('Unauthorized', { status: 401 });
     }
+    if (ctx?.session?.user?.role === 'CLIENTE') {
+      return NextResponse.json({ message: 'Forbidden' }, { status: 403 });
+    }
 
     try {
       const { id } = await params;
@@ -26,15 +29,27 @@ export async function PUT(
         igtfAmountUsd,
         totalRetBs,
         due_date,
-        issue_date
+        issue_date,
+        proximo_vencimiento_producto
       } = body;
 
       const newIssueDate = issue_date ? new Date(issue_date) : undefined;
       const newDueDate = due_date ? new Date(due_date) : undefined;
+      // Si no viene el vencimiento de la factura, se mantiene el comportamiento previo (copia el de servicio)
+      const newProximo = proximo_vencimiento_producto
+        ? new Date(proximo_vencimiento_producto)
+        : newDueDate;
 
       if (newIssueDate && newDueDate && newDueDate < newIssueDate) {
         return NextResponse.json(
           { message: "La fecha de vencimiento no puede ser anterior a la fecha de emisión" },
+          { status: 400 }
+        );
+      }
+
+      if (newIssueDate && newProximo && newProximo < newIssueDate) {
+        return NextResponse.json(
+          { message: "La fecha de vencimiento de la factura no puede ser anterior a la fecha de emisión" },
           { status: 400 }
         );
       }
@@ -54,7 +69,7 @@ export async function PUT(
             currency_mode: currencyMode,
             issue_date: newIssueDate,
             due_date: newDueDate,
-            proximo_vencimiento_producto: newDueDate,
+            proximo_vencimiento_producto: newProximo,
             currency_rate: currencyRate,
             subtotal_usd: subtotalUsd,
             tax_amount_usd: taxAmountUsd,
@@ -98,6 +113,9 @@ export async function PATCH(
     if (!ctx?.fromApiKey && !ctx?.session) {
       return new NextResponse('Unauthorized', { status: 401 });
     }
+    if (ctx?.session?.user?.role === 'CLIENTE') {
+      return NextResponse.json({ message: 'Forbidden' }, { status: 403 });
+    }
 
     try {
       const { id } = await params;
@@ -127,6 +145,9 @@ export async function DELETE(
   return withApiKeyAuth(req, async (ctx) => {
     if (!ctx?.fromApiKey && !ctx?.session) {
       return NextResponse.json({ message: 'Unauthorized' }, { status: 401 });
+    }
+    if (ctx?.session?.user?.role === 'CLIENTE') {
+      return NextResponse.json({ message: 'Forbidden' }, { status: 403 });
     }
 
     try {

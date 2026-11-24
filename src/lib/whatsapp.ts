@@ -1,5 +1,6 @@
 
 import axios from 'axios';
+import { aplicarFirmaWhatsApp } from './whatsapp-firma';
 
 /**
  * Servicio de envío de WhatsApp utilizando la API de MassivaMovil.
@@ -32,7 +33,7 @@ export async function sendWhatsAppMassiva(recipient: string, message: string) {
     bodyParams.append('recipient', formattedRecipient);
     bodyParams.append('type', 'text');
     bodyParams.append('priority', '2');
-    bodyParams.append('message', message);
+    bodyParams.append('message', aplicarFirmaWhatsApp(message));
 
     const response = await fetch(url, {
       method: 'POST',

@@ -86,7 +86,12 @@ export async function proxy(request: NextRequest) {
           return NextResponse.next();
         }
       }
-      
+
+      // CLIENTE: acceso a su vista de facturas (solo sus facturas, sin acciones de escritura)
+      if (userRole === 'CLIENTE') {
+        return NextResponse.next();
+      }
+
       return NextResponse.redirect(new URL('/access-denied', nextUrl));
     }
 

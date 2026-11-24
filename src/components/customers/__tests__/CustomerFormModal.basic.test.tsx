@@ -51,7 +51,7 @@ describe('CustomerFormModal Basic Tests', () => {
   });
 
   it('renders the modal when isOpen is true', () => {
-    render(<CustomerFormModal isOpen={true} onClose={mockOnClose} />);
+    render(<CustomerFormModal isOpen={true} onClose={mockOnClose} onSuccess={jest.fn()} />);
     expect(screen.getByText('Crear Nuevo Cliente')).toBeInTheDocument();
   });
 

@@ -7,48 +7,74 @@ import { prisma } from "@/lib/db";
 export default async function FacturacionPage() {
   const session = await auth();
 
-  if (!session || (session.user.role !== "MASSIVA_ADMIN" && session.user.role !== "MASSIVA_EXTRA")) {
+  if (
+    !session ||
+    (session.user.role !== "MASSIVA_ADMIN" &&
+      session.user.role !== "MASSIVA_EXTRA" &&
+      session.user.role !== "CLIENTE")
+  ) {
     redirect("/auth/login");
   }
 
+  const isClient = session.user.role === "CLIENTE";
+
+  // CLIENTE: resolver su customer vinculado (User 1:1 → Customer.user_id)
+  const clientCustomer = isClient
+    ? await prisma.customer.findUnique({
+        where: { user_id: session.user.id },
+        select: { id: true },
+      })
+    : null;
+
   // Fetch invoices and payments in parallel (Vercel Best Practice 3.5)
   const [invoices, payments] = await Promise.all([
-    prisma.invoice.findMany({
-      include: {
-        customer: {
-          select: {
-            name: true,
-            doc_number: true,
-            direccion_fiscal: true,
-            persona_contacto_info: true,
-            telefono_empresa: true,
-            email: true,
-            is_agente_retencion: true,
-            porcent_retencion_iva: true,
-            porcent_retencion_islr: true,
-            porcent_retencion_municipio: true,
-          }
-        },
-        invoice_items: {
+    // Sin customer vinculado → lista vacía (no exponer facturas ajenas)
+    isClient && !clientCustomer
+      ? Promise.resolve([])
+      : prisma.invoice.findMany({
+          where: isClient
+            ? { customer_id: clientCustomer!.id, status: { notIn: ["DRAFT"] } }
+            : {},
           include: {
-            product: {
+            customer: {
               select: {
-                sku: true,
-                name: true
+                id: true,
+                name: true,
+                doc_number: true,
+                direccion_fiscal: true,
+                persona_contacto_info: true,
+                telefono_empresa: true,
+                telefono_celular: true,
+                email: true,
+                is_agente_retencion: true,
+                porcent_retencion_iva: true,
+                porcent_retencion_islr: true,
+                porcent_retencion_municipio: true,
+              }
+            },
+            invoice_items: {
+              include: {
+                product: {
+                  select: {
+                    sku: true,
+                    name: true
+                  }
+                }
               }
             }
-          }
-        }
-      },
-      orderBy: { issue_date: "desc" }
-    }),
-    prisma.payment.findMany({
-      include: {
-        customer: { select: { name: true, doc_number: true } }
-      },
-      orderBy: { payment_date: "desc" },
-      take: 100
-    })
+          },
+          orderBy: { issue_date: "desc" }
+        }),
+    // La pestaña Pagos es solo para personal: el cliente no ve pagos globales
+    isClient
+      ? Promise.resolve([])
+      : prisma.payment.findMany({
+          include: {
+            customer: { select: { name: true, doc_number: true } }
+          },
+          orderBy: { payment_date: "desc" },
+          take: 100
+        })
   ]);
 
   // Serialize only necessary fields to reduce payload size (Vercel Best Practice 3.4)
@@ -72,11 +98,13 @@ export default async function FacturacionPage() {
     total_bs: Number(invoice.total_bs),
     retention_amount_bs: Number(invoice.retention_amount_bs),
     customer: {
+      id: invoice.customer.id,
       name: invoice.customer.name,
       doc_number: invoice.customer.doc_number,
       direccion_fiscal: invoice.customer.direccion_fiscal ?? undefined,
       persona_contacto_info: invoice.customer.persona_contacto_info ?? undefined,
       telefono_empresa: invoice.customer.telefono_empresa ?? undefined,
+      telefono_celular: invoice.customer.telefono_celular ?? undefined,
       email: invoice.customer.email ?? undefined,
       ...(invoice.customer as any).porcent_retencion_iva !== undefined && { porcent_retencion_iva: Number((invoice.customer as any).porcent_retencion_iva) },
       ...(invoice.customer as any).porcent_retencion_islr !== undefined && { porcent_retencion_islr: Number((invoice.customer as any).porcent_retencion_islr) },
@@ -108,6 +136,7 @@ export default async function FacturacionPage() {
       <InvoicePageClient 
         initialInvoices={serializedInvoices} 
         initialPayments={serializedPayments} 
+        view={isClient ? "cliente" : "admin"}
       />
     </div>
   );

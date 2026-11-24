@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { LIMITE_TEXTO_WHATSAPP } from "@/lib/whatsapp-firma";
 import {
   Dialog,
   DialogContent,
@@ -21,6 +22,11 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Loader2, MessageSquare, Phone, Mail, Users, CheckCircle2, XCircle } from "lucide-react";
+import {
+  EMAIL_TEMPLATE_TYPES,
+  EMAIL_TEMPLATES,
+  type EmailTemplateType,
+} from "@/lib/email-templates";
 
 export type BulkCanal = "SMS" | "WHATSAPP" | "EMAIL";
 export type BulkDestino = "principal" | "contacto" | "cobranza";
@@ -49,7 +55,7 @@ interface BulkContactModalProps {
 
 const canalConfig = {
   SMS: { label: "SMS", icon: MessageSquare, color: "text-blue-600", bgColor: "bg-blue-50", btnColor: "bg-blue-600 hover:bg-blue-700", maxLength: 160 },
-  WHATSAPP: { label: "WhatsApp", icon: Phone, color: "text-emerald-600", bgColor: "bg-emerald-50", btnColor: "bg-emerald-600 hover:bg-emerald-700", maxLength: 1000 },
+  WHATSAPP: { label: "WhatsApp", icon: Phone, color: "text-emerald-600", bgColor: "bg-emerald-50", btnColor: "bg-emerald-600 hover:bg-emerald-700", maxLength: LIMITE_TEXTO_WHATSAPP },
   EMAIL: { label: "Email", icon: Mail, color: "text-violet-600", bgColor: "bg-violet-50", btnColor: "bg-violet-600 hover:bg-violet-700", maxLength: null },
 } as const;
 
@@ -71,9 +77,14 @@ export default function BulkContactModal({
   const [destino, setDestino] = useState<BulkDestino>(destinos[0] || "principal");
   const [subject, setSubject] = useState("");
   const [message, setMessage] = useState("");
+  const [emailTemplate, setEmailTemplate] = useState<EmailTemplateType>("general");
   const [sending, setSending] = useState(false);
   const [result, setResult] = useState<BulkResult | null>(null);
   const [error, setError] = useState<string | null>(null);
+
+  // Defaults aplicados por la última plantilla: si el usuario no los tocó,
+  // al cambiar de plantilla se reemplazan; si los editó, se conservan.
+  const prevDefaultsRef = useRef({ subject: "", model: "" });
 
   // Ref para no resetear el formulario cuando el padre recrea el array de destinos en cada render
   const destinosRef = useRef(destinos);
@@ -86,11 +97,22 @@ export default function BulkContactModal({
       setDestino(destinosRef.current[0] || "principal");
       setSubject("");
       setMessage("");
+      setEmailTemplate("general");
+      prevDefaultsRef.current = { subject: "", model: "" };
       setResult(null);
       setError(null);
       setSending(false);
     }
   }, [isOpen]);
+
+  const aplicarTemplate = (next: EmailTemplateType) => {
+    const meta = EMAIL_TEMPLATES[next];
+    const prev = prevDefaultsRef.current;
+    if (subject === "" || subject === prev.subject) setSubject(meta.subject);
+    if (message === "" || message === prev.model) setMessage(meta.model);
+    prevDefaultsRef.current = { subject: meta.subject, model: meta.model };
+    setEmailTemplate(next);
+  };
 
   const cfg = canalConfig[channel];
   const maxLength = cfg.maxLength;
@@ -112,6 +134,7 @@ export default function BulkContactModal({
           destino,
           message,
           subject: channel === "EMAIL" ? subject : undefined,
+          template: channel === "EMAIL" ? emailTemplate : undefined,
         }),
       });
       const data = await res.json().catch(() => ({}));
@@ -184,7 +207,15 @@ export default function BulkContactModal({
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="space-y-1.5">
                 <span className="text-xs font-bold uppercase text-slate-500">Canal</span>
-                <Select value={channel} onValueChange={(v) => setChannel(v as BulkCanal)} disabled={sending}>
+                <Select
+                  value={channel}
+                  onValueChange={(v) => {
+                    const next = v as BulkCanal;
+                    setChannel(next);
+                    if (next === "EMAIL") aplicarTemplate(emailTemplate);
+                  }}
+                  disabled={sending}
+                >
                   <SelectTrigger className="h-10">
                     <SelectValue placeholder="Canal" />
                   </SelectTrigger>
@@ -211,16 +242,35 @@ export default function BulkContactModal({
             </div>
 
             {channel === "EMAIL" && (
-              <div className="space-y-1.5">
-                <span className="text-xs font-bold uppercase text-slate-500">Asunto</span>
-                <Input
-                  value={subject}
-                  onChange={(e) => setSubject(e.target.value)}
-                  placeholder="Asunto del correo..."
-                  disabled={sending}
-                  className="h-10"
-                />
-              </div>
+              <>
+                <div className="space-y-1.5">
+                  <span className="text-xs font-bold uppercase text-slate-500">Tipo de correo</span>
+                  <Select value={emailTemplate} onValueChange={(v) => aplicarTemplate(v as EmailTemplateType)} disabled={sending}>
+                    <SelectTrigger className="h-10">
+                      <SelectValue placeholder="Tipo de correo" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {EMAIL_TEMPLATE_TYPES.map((t) => (
+                        <SelectItem key={t} value={t}>
+                          {EMAIL_TEMPLATES[t].label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <p className="text-[11px] text-slate-400">{EMAIL_TEMPLATES[emailTemplate].hint}</p>
+                </div>
+
+                <div className="space-y-1.5">
+                  <span className="text-xs font-bold uppercase text-slate-500">Asunto</span>
+                  <Input
+                    value={subject}
+                    onChange={(e) => setSubject(e.target.value)}
+                    placeholder="Asunto del correo..."
+                    disabled={sending}
+                    className="h-10"
+                  />
+                </div>
+              </>
             )}
 
             <div className="space-y-1.5">

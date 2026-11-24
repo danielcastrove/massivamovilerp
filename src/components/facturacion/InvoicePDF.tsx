@@ -295,7 +295,7 @@ const InvoicePDF = ({ invoice }: InvoicePDFProps) => {
         <View style={styles.header}>
           <View style={styles.logoColumn}>
             <Image src={`${baseUrl}/massivamovil.png`} style={styles.logo} />
-            <Text style={styles.companyTitle}>MASSIVAMOVIL, C.A.</Text>
+            <Text style={styles.companyTitle}>Forward Soluciones C.A.</Text>
             {isFactura && <Text style={styles.companyText}>RIF: J-40086828-9</Text>}
           </View>
           

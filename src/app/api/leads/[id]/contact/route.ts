@@ -3,6 +3,12 @@ import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/db";
 import { auth } from "@/lib/auth";
 import { sendNotification } from "@/lib/notifications";
+import { aplicarFirmaWhatsApp, LIMITE_WHATSAPP } from "@/lib/whatsapp-firma";
+import {
+  buildBrandEmail,
+  emailMessageToHtml,
+  isEmailTemplateType,
+} from "@/lib/email-templates";
 import {
   appendContactoExtra,
   formatPhoneParaEnvio,
@@ -23,10 +29,14 @@ export async function POST(
 
     const { id } = await params;
     const body = await req.json();
-    const { channel, message, subject, to, save_contact } = body;
+    const { channel, message, subject, to, save_contact, template } = body;
 
     if (!channel || !["SMS", "WHATSAPP", "EMAIL"].includes(channel)) {
       return NextResponse.json({ message: "Canal inválido." }, { status: 400 });
+    }
+
+    if (template !== undefined && template !== null && !isEmailTemplateType(template)) {
+      return NextResponse.json({ message: "Plantilla de correo inválida." }, { status: 400 });
     }
 
     if (!message || typeof message !== "string" || message.trim().length === 0) {
@@ -41,7 +51,7 @@ export async function POST(
       return NextResponse.json({ message: "El SMS no puede exceder 160 caracteres." }, { status: 400 });
     }
 
-    if (channel === "WHATSAPP" && message.length > 1000) {
+    if (channel === "WHATSAPP" && aplicarFirmaWhatsApp(message).length > LIMITE_WHATSAPP) {
       return NextResponse.json({ message: "El mensaje de WhatsApp no puede exceder 1000 caracteres." }, { status: 400 });
     }
 
@@ -107,7 +117,13 @@ export async function POST(
     const result = await sendNotification({
       to: recipient,
       customerName: leadName,
-      message: channel === "EMAIL" ? `<p>${message.replace(/\n/g, "<br/>")}</p>` : message,
+      message:
+        channel === "EMAIL"
+          ? buildBrandEmail({
+              type: isEmailTemplateType(template) ? template : "general",
+              bodyHtml: emailMessageToHtml(message),
+            })
+          : message,
       type: channel as "SMS" | "WHATSAPP" | "EMAIL",
       subject: subject || undefined,
     });

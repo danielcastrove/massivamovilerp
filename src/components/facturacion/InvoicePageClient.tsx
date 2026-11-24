@@ -11,11 +11,12 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { Plus, Search, FileText, Download, Loader2, MoreVertical, Pencil, Trash, Receipt as ReceiptIcon, ArrowRight, History, Hash, Eye } from "lucide-react";
+import { Plus, Search, FileText, Download, Loader2, MoreVertical, Pencil, Trash, Receipt as ReceiptIcon, ArrowRight, History, Hash, Eye, Mail, MessageSquare, MessageCircle } from "lucide-react";
 import Link from "next/link";
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
 import InvoicePDF from "./InvoicePDF";
+import SupportContactModal, { type SupportChannel } from "./SupportContactModal";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -104,10 +105,20 @@ interface Payment {
 interface InvoicePageClientProps {
   initialInvoices: Invoice[];
   initialPayments: Payment[];
+  /** "cliente" = vista restringida (solo sus facturas, sin acciones de escritura) */
+  view?: "admin" | "cliente";
 }
 
 // Sub-component for individual row actions
-const InvoiceActionButtons = ({ invoice }: { invoice: Invoice }) => {
+const InvoiceActionButtons = ({
+  invoice,
+  view = "admin",
+  onContact,
+}: {
+  invoice: Invoice;
+  view?: "admin" | "cliente";
+  onContact?: (invoice: Invoice, channel: SupportChannel) => void;
+}) => {
   const [generating, setGenerating] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
@@ -183,6 +194,38 @@ const InvoiceActionButtons = ({ invoice }: { invoice: Invoice }) => {
         {generating ? <Loader2 className="h-4 w-4 animate-spin text-slate-400" /> : <Download className="h-4 w-4 text-slate-500" />}
       </Button>
 
+      {/* Vista cliente: contacto con soporte (destino fijo MassivaMovil) */}
+      {view === "cliente" && (
+        <>
+          <Button
+            variant="ghost"
+            size="icon"
+            title="Enviar email a soporte"
+            onClick={() => onContact?.(invoice, "EMAIL")}
+          >
+            <Mail className="h-4 w-4 text-violet-500" />
+          </Button>
+          <Button
+            variant="ghost"
+            size="icon"
+            title="Enviar SMS a soporte"
+            onClick={() => onContact?.(invoice, "SMS")}
+          >
+            <MessageSquare className="h-4 w-4 text-blue-500" />
+          </Button>
+          <Button
+            variant="ghost"
+            size="icon"
+            title="Enviar WhatsApp a soporte"
+            onClick={() => onContact?.(invoice, "WHATSAPP")}
+          >
+            <MessageCircle className="h-4 w-4 text-emerald-500" />
+          </Button>
+        </>
+      )}
+
+      {view === "admin" && (
+      <>
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
           <Button variant="ghost" size="icon" className="h-8 w-8 p-0">
@@ -231,6 +274,8 @@ const InvoiceActionButtons = ({ invoice }: { invoice: Invoice }) => {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+      </>
+      )}
     </div>
   );
 };
@@ -253,11 +298,13 @@ const getStatusBadge = (status: Invoice["status"]) => {
   );
 };
 
-export default function InvoicePageClient({ initialInvoices, initialPayments }: InvoicePageClientProps) {
+export default function InvoicePageClient({ initialInvoices, initialPayments, view = "admin" }: InvoicePageClientProps) {
+  const isClient = view === "cliente";
   const [searchTerm, setSearchTerm] = useState("");
   const [isSelectionModalOpen, setIsSelectionModalOpen] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
   const [currentPagePayments, setCurrentPagePayments] = useState(1);
+  const [supportContact, setSupportContact] = useState<{ invoice: Invoice; channel: SupportChannel } | null>(null);
   const ITEMS_PER_PAGE = 20;
   const [itemsPerPage, setItemsPerPage] = useState(ITEMS_PER_PAGE);
   const router = useRouter();
@@ -307,26 +354,36 @@ export default function InvoicePageClient({ initialInvoices, initialPayments }: 
     <div className="p-6 space-y-6">
       <div className="flex justify-between items-center">
         <div>
-          <h1 className="text-3xl font-black text-slate-900 tracking-tight uppercase">Módulo de Facturación</h1>
-          <p className="text-slate-500 italic">Gestión administrativa de facturas, recibos y recaudación.</p>
+          <h1 className="text-3xl font-black text-slate-900 tracking-tight uppercase">
+            {isClient ? "Mis Facturas" : "Módulo de Facturación"}
+          </h1>
+          <p className="text-slate-500 italic">
+            {isClient
+              ? "Consulta tus facturas, recibos y estados. Usa los botones de contacto de cada factura para comunicarte con soporte."
+              : "Gestión administrativa de facturas, recibos y recaudación."}
+          </p>
         </div>
-        <Button 
-          className="bg-cyan-600 hover:bg-cyan-700 text-white gap-2 transition-all font-bold shadow-md" 
-          onClick={handleOpenSelection}
-        >
-          <Plus className="h-4 w-4" /> Nueva Factura / Recibo
-        </Button>
+        {!isClient && (
+          <Button 
+            className="bg-cyan-600 hover:bg-cyan-700 text-white gap-2 transition-all font-bold shadow-md" 
+            onClick={handleOpenSelection}
+          >
+            <Plus className="h-4 w-4" /> Nueva Factura / Recibo
+          </Button>
+        )}
       </div>
 
       <Tabs defaultValue="invoices" className="w-full">
         <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-6">
           <TabsList className="bg-slate-100 p-1">
             <TabsTrigger value="invoices" className="gap-2 text-xs font-bold uppercase tracking-tighter data-[state=active]:bg-white data-[state=active]:text-cyan-700">
-              <FileText className="h-3.5 w-3.5" /> Facturas y Recibos
+              <FileText className="h-3.5 w-3.5" /> {isClient ? "Mis Facturas y Recibos" : "Facturas y Recibos"}
             </TabsTrigger>
-            <TabsTrigger value="payments" className="gap-2 text-xs font-bold uppercase tracking-tighter data-[state=active]:bg-white data-[state=active]:text-cyan-700">
-              <History className="h-3.5 w-3.5" /> Historial de Pagos
-            </TabsTrigger>
+            {!isClient && (
+              <TabsTrigger value="payments" className="gap-2 text-xs font-bold uppercase tracking-tighter data-[state=active]:bg-white data-[state=active]:text-cyan-700">
+                <History className="h-3.5 w-3.5" /> Historial de Pagos
+              </TabsTrigger>
+            )}
           </TabsList>
 
           <div className="relative w-full md:w-64">
@@ -347,7 +404,7 @@ export default function InvoicePageClient({ initialInvoices, initialPayments }: 
                 <TableRow className="bg-slate-50/50">
                   <TableHead className="w-[120px] text-[10px] font-bold uppercase">Nro. Factura</TableHead>
                   <TableHead className="w-[120px] text-[10px] font-bold uppercase">Nro. Control</TableHead>
-                  <TableHead className="text-[10px] font-bold uppercase">Cliente</TableHead>
+                  {!isClient && <TableHead className="text-[10px] font-bold uppercase">Cliente</TableHead>}
                   <TableHead className="text-[10px] font-bold uppercase">Tipo</TableHead>
                   <TableHead className="text-[10px] font-bold uppercase">Fecha Emisión</TableHead>
                   <TableHead className="text-[10px] font-bold uppercase">Vencimiento</TableHead>
@@ -360,8 +417,10 @@ export default function InvoicePageClient({ initialInvoices, initialPayments }: 
               <TableBody>
                 {filteredInvoices.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={10} className="text-center py-10 text-slate-500">
-                      No se encontraron documentos fiscales.
+                    <TableCell colSpan={isClient ? 9 : 10} className="text-center py-10 text-slate-500">
+                      {isClient
+                        ? "No tienes facturas registradas. Si crees que es un error, contacta a soporte."
+                        : "No se encontraron documentos fiscales."}
                     </TableCell>
                   </TableRow>
                 ) : (
@@ -373,7 +432,7 @@ export default function InvoicePageClient({ initialInvoices, initialPayments }: 
                       <TableCell className="font-mono text-slate-400">
                         {invoice.control_number ? String(invoice.control_number).padStart(6, '0') : "-"}
                       </TableCell>
-                      <TableCell className="font-bold">{invoice.customer.name}</TableCell>
+                      {!isClient && <TableCell className="font-bold">{invoice.customer.name}</TableCell>}
                       <TableCell>
                          <Badge variant="outline" className="text-[9px] font-bold uppercase border-slate-200 bg-white">
                            {invoice.type}
@@ -389,7 +448,11 @@ export default function InvoicePageClient({ initialInvoices, initialPayments }: 
                       <TableCell className="text-slate-500">Bs {invoice.total_bs.toLocaleString("es-VE", { minimumFractionDigits: 2 })}</TableCell>
                       <TableCell className="text-center">{getStatusBadge(invoice.status)}</TableCell>
                       <TableCell className="text-right pr-4">
-                        <InvoiceActionButtons invoice={invoice} />
+                        <InvoiceActionButtons
+                          invoice={invoice}
+                          view={view}
+                          onContact={(inv, channel) => setSupportContact({ invoice: inv, channel })}
+                        />
                       </TableCell>
                     </TableRow>
                   ))
@@ -433,6 +496,7 @@ export default function InvoicePageClient({ initialInvoices, initialPayments }: 
           </div>
         </TabsContent>
 
+        {!isClient && (
         <TabsContent value="payments" className="mt-0">
           <div className="bg-white rounded-lg border shadow-sm overflow-hidden">
             <Table>
@@ -537,7 +601,18 @@ export default function InvoicePageClient({ initialInvoices, initialPayments }: 
             )}
           </div>
         </TabsContent>
+        )}
       </Tabs>
+
+      {/* Contacto con soporte (vista cliente): destino fijo MassivaMovil */}
+      {supportContact && (
+        <SupportContactModal
+          isOpen
+          onClose={() => setSupportContact(null)}
+          invoice={supportContact.invoice}
+          initialChannel={supportContact.channel}
+        />
+      )}
 
       {/* Selection Modal */}
       <Dialog open={isSelectionModalOpen} onOpenChange={setIsSelectionModalOpen}>

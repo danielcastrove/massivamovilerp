@@ -1,9 +1,10 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
+import { LIMITE_TEXTO_WHATSAPP } from "@/lib/whatsapp-firma";
 import {
   Dialog,
   DialogContent,
@@ -12,6 +13,16 @@ import {
   DialogDescription,
   DialogFooter,
 } from "@/components/ui/dialog";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import {
   Form,
   FormControl,
@@ -32,14 +43,23 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Loader2, MessageSquare, Phone, Mail } from "lucide-react";
+import { Loader2, MessageSquare, Phone, Mail, Pencil, Trash2, Check, X } from "lucide-react";
 import {
   buildContactOptions,
   parseContactosExtra,
+  normalizeValor,
   isValidEmail,
   isValidPhone,
+  type ContactoExtra,
   type ContactoFuente,
+  type ContactoOpcion,
+  type ContactoTipo,
 } from "@/lib/contacts";
+import {
+  EMAIL_TEMPLATE_TYPES,
+  EMAIL_TEMPLATES,
+  type EmailTemplateType,
+} from "@/lib/email-templates";
 
 export interface ContactEntity {
   id: string;
@@ -54,6 +74,7 @@ export interface ContactEntity {
 }
 
 interface InfoContactoJson {
+  nombre?: string | null;
   email?: string | null;
   telefono?: string | null;
   telefono_celular?: string | null;
@@ -89,7 +110,7 @@ const channelConfig = {
     bgColor: "bg-emerald-50",
     borderColor: "border-emerald-200",
     btnColor: "bg-emerald-600 hover:bg-emerald-700",
-    maxLength: 1000,
+    maxLength: LIMITE_TEXTO_WHATSAPP,
     label: "Enviar WhatsApp",
   },
   EMAIL: {
@@ -122,6 +143,46 @@ const fuenteLabels: Record<ContactoFuente, string> = {
   extra: "extra",
 };
 
+type Channel = "SMS" | "WHATSAPP" | "EMAIL";
+
+function construirOpciones(
+  entity: ContactEntity,
+  channel: Channel,
+  extras: ContactoExtra[],
+  preferSources?: ContactoFuente[]
+): ContactoOpcion[] {
+  const pci = entity.persona_contacto_info as InfoContactoJson | undefined;
+  const cob = entity.persona_cobranza_info as InfoContactoJson | undefined;
+  const base =
+    channel === "EMAIL"
+      ? buildContactOptions(
+          [
+            { valor: entity.email, fuente: "principal", nombre: entity.name },
+            { valor: pci?.email, fuente: "contacto", nombre: pci?.nombre },
+            { valor: cob?.email, fuente: "cobranza", nombre: cob?.nombre },
+          ],
+          "EMAIL",
+          extras
+        )
+      : buildContactOptions(
+          [
+            { valor: entity.telefono_empresa, fuente: "principal", nombre: entity.name },
+            { valor: entity.telefono_celular, fuente: "principal", nombre: entity.name },
+            { valor: pci?.telefono, fuente: "contacto", nombre: pci?.nombre },
+            { valor: pci?.telefono_celular, fuente: "contacto", nombre: pci?.nombre },
+            { valor: cob?.telefono, fuente: "cobranza", nombre: cob?.nombre },
+          ],
+          "PHONE",
+          extras
+        );
+  if (!preferSources || preferSources.length === 0) return base;
+  const rank = (fuente: ContactoFuente) => {
+    const i = preferSources.indexOf(fuente);
+    return i === -1 ? preferSources.length : i;
+  };
+  return [...base].sort((a, b) => rank(a.fuente) - rank(b.fuente));
+}
+
 const CUSTOM_OPTION = "__custom__";
 
 export function ContactModal({ isOpen, onClose, entity, channel, apiBase, onSuccess, preferSources }: ContactModalProps) {
@@ -133,6 +194,11 @@ export function ContactModal({ isOpen, onClose, entity, channel, apiBase, onSucc
   const [customValor, setCustomValor] = useState("");
   const [saveContact, setSaveContact] = useState(true);
   const [sentTo, setSentTo] = useState<string | null>(null);
+  const [emailTemplate, setEmailTemplate] = useState<EmailTemplateType>("general");
+
+  // Defaults aplicados por la última plantilla: si el usuario no los tocó,
+  // al cambiar de plantilla se reemplazan; si los editó, se conservan.
+  const prevDefaultsRef = useRef({ subject: "", model: "" });
 
   const config = channelConfig[channel];
   const Icon = config.icon;
@@ -140,49 +206,44 @@ export function ContactModal({ isOpen, onClose, entity, channel, apiBase, onSucc
 
   const isEditable = channel === "EMAIL" || channel === "SMS";
 
-  const contactosExtra = useMemo(() => parseContactosExtra(entity.contactos_extra), [entity.contactos_extra]);
+  const extraTipo: ContactoTipo = channel === "EMAIL" ? "EMAIL" : "PHONE";
 
-  const opciones = useMemo(() => {
-    if (!isEditable) return [];
-    const pci = entity.persona_contacto_info as InfoContactoJson | undefined;
-    const cob = entity.persona_cobranza_info as InfoContactoJson | undefined;
-    const base =
-      channel === "EMAIL"
-        ? buildContactOptions(
-            [
-              { valor: entity.email, fuente: "principal" },
-              { valor: pci?.email, fuente: "contacto" },
-              { valor: cob?.email, fuente: "cobranza" },
-            ],
-            "EMAIL",
-            contactosExtra
-          )
-        : buildContactOptions(
-            [
-              { valor: entity.telefono_empresa, fuente: "principal" },
-              { valor: entity.telefono_celular, fuente: "principal" },
-              { valor: pci?.telefono, fuente: "contacto" },
-              { valor: pci?.telefono_celular, fuente: "contacto" },
-              { valor: cob?.telefono, fuente: "cobranza" },
-            ],
-            "PHONE",
-            contactosExtra
-          );
-    if (!preferSources || preferSources.length === 0) return base;
-    const rank = (fuente: ContactoFuente) => {
-      const i = preferSources.indexOf(fuente);
-      return i === -1 ? preferSources.length : i;
-    };
-    return [...base].sort((a, b) => rank(a.fuente) - rank(b.fuente));
-  }, [channel, entity, contactosExtra, isEditable, preferSources]);
+  const [contactosExtra, setContactosExtra] = useState<ContactoExtra[]>(() =>
+    parseContactosExtra(entity.contactos_extra)
+  );
+  const [editingValor, setEditingValor] = useState<string | null>(null);
+  const [editInput, setEditInput] = useState("");
+  const [editSaving, setEditSaving] = useState(false);
+  const [pendingDelete, setPendingDelete] = useState<ContactoExtra | null>(null);
+  const [deleteSaving, setDeleteSaving] = useState(false);
+  const [actionError, setActionError] = useState<string | null>(null);
+
+  const extrasVisibles = useMemo(
+    () => contactosExtra.filter((c) => c.tipo === extraTipo),
+    [contactosExtra, extraTipo]
+  );
+
+  const opciones = useMemo(
+    () => construirOpciones(entity, channel, contactosExtra, preferSources),
+    [channel, entity, contactosExtra, preferSources]
+  );
 
   useEffect(() => {
     if (!isOpen) return;
+    const extras = parseContactosExtra(entity.contactos_extra);
+    setContactosExtra(extras);
     setRecipientMode("select");
     setCustomValor("");
     setSaveContact(true);
+    setEditingValor(null);
+    setEditInput("");
+    setActionError(null);
+    setPendingDelete(null);
+    setEmailTemplate("general");
+    prevDefaultsRef.current = { subject: "", model: "" };
+    const opcionesIniciales = isEditable ? construirOpciones(entity, channel, extras, preferSources) : [];
     const preferida = preferSources?.length
-      ? opciones.find((op) => preferSources.includes(op.fuente))
+      ? opcionesIniciales.find((op) => preferSources.includes(op.fuente))
       : undefined;
     setSelectedValor(preferida?.valor ?? getRecipient(entity, channel));
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -199,6 +260,15 @@ export function ContactModal({ isOpen, onClose, entity, channel, apiBase, onSucc
     recipientMode === "custom" &&
     customValor.trim().length > 0 &&
     (channel === "EMAIL" ? !isValidEmail(customValor) : !isValidPhone(customValor));
+
+  const destinoInfo = useMemo(() => {
+    const valor = sentTo || recipient;
+    if (!valor) return null;
+    const key = normalizeValor(valor, extraTipo);
+    if (!key) return null;
+    const op = opciones.find((o) => normalizeValor(o.valor, extraTipo) === key);
+    return op ? { nombre: op.nombre, fuente: op.fuente } : null;
+  }, [sentTo, recipient, opciones, extraTipo]);
 
   const contactSchema = z.object({
     message: z.string().min(1, "El mensaje es requerido"),
@@ -219,6 +289,21 @@ export function ContactModal({ isOpen, onClose, entity, channel, apiBase, onSucc
   const watchedMessage = form.watch("message" as any);
   const charsLeft = maxLength !== null ? maxLength - (watchedMessage?.length || 0) : null;
 
+  const aplicarTemplate = (next: EmailTemplateType) => {
+    const meta = EMAIL_TEMPLATES[next];
+    const prev = prevDefaultsRef.current;
+    const currentSubject = (form.getValues("subject") as string) || "";
+    const currentMessage = (form.getValues("message") as string) || "";
+    if (currentSubject === "" || currentSubject === prev.subject) {
+      form.setValue("subject", meta.subject, { shouldValidate: true });
+    }
+    if (currentMessage === "" || currentMessage === prev.model) {
+      form.setValue("message", meta.model, { shouldValidate: true });
+    }
+    prevDefaultsRef.current = { subject: meta.subject, model: meta.model };
+    setEmailTemplate(next);
+  };
+
   async function onSubmit(values: ContactFormValues) {
     setLoading(true);
     setError(null);
@@ -228,6 +313,7 @@ export function ContactModal({ isOpen, onClose, entity, channel, apiBase, onSucc
         channel,
         message: values.message,
         subject: values.subject || undefined,
+        template: channel === "EMAIL" ? emailTemplate : undefined,
       };
       if (isEditable) {
         body.to = recipient;
@@ -256,6 +342,104 @@ export function ContactModal({ isOpen, onClose, entity, channel, apiBase, onSucc
     }
   }
 
+  function contactosExtraUrl(): string {
+    const base = apiBase || "/api/customers";
+    return `${base}/${entity.id}/contactos-extra`;
+  }
+
+  async function contactosExtraRequest(method: "PATCH" | "DELETE", payload: Record<string, unknown>): Promise<{ contactos_extra: unknown }> {
+    const res = await fetch(contactosExtraUrl(), {
+      method,
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.message || "Error al actualizar el contacto.");
+    return data;
+  }
+
+  function aplicarCambioExtras(nuevos: unknown, valorAnterior: string | null, valorNuevo: string | null) {
+    const lista = parseContactosExtra(nuevos);
+    setContactosExtra(lista);
+    if (recipientMode !== "select" || !valorAnterior) return;
+    if (normalizeValor(selectedValor, extraTipo) !== normalizeValor(valorAnterior, extraTipo)) return;
+    if (valorNuevo) {
+      setSelectedValor(valorNuevo);
+      return;
+    }
+    const opcionesNuevas = construirOpciones(entity, channel, lista, preferSources);
+    const preferida = preferSources?.length
+      ? opcionesNuevas.find((op) => preferSources.includes(op.fuente))
+      : undefined;
+    const recipientBase = getRecipient(entity, channel);
+    const existeRecipient = recipientBase
+      ? opcionesNuevas.some((op) => normalizeValor(op.valor, extraTipo) === normalizeValor(recipientBase, extraTipo))
+      : false;
+    setSelectedValor(preferida?.valor ?? (existeRecipient ? recipientBase : opcionesNuevas[0]?.valor ?? ""));
+  }
+
+  function startEdit(c: ContactoExtra) {
+    setEditingValor(c.valor);
+    setEditInput(c.valor);
+    setActionError(null);
+  }
+
+  function cancelEdit() {
+    setEditingValor(null);
+    setEditInput("");
+    setActionError(null);
+  }
+
+  async function saveEdit() {
+    if (!editingValor) return;
+    const nuevo = editInput.trim();
+    if (!nuevo) {
+      setActionError("El valor no puede estar vacío.");
+      return;
+    }
+    if (extraTipo === "EMAIL" ? !isValidEmail(nuevo) : !isValidPhone(nuevo)) {
+      setActionError(
+        extraTipo === "EMAIL" ? "Ingresa un correo válido." : "Ingresa un teléfono válido (7 a 15 dígitos)."
+      );
+      return;
+    }
+    setEditSaving(true);
+    setActionError(null);
+    try {
+      const data = await contactosExtraRequest("PATCH", {
+        tipo: extraTipo,
+        valor: editingValor,
+        nuevoValor: nuevo,
+      });
+      aplicarCambioExtras(data.contactos_extra, editingValor, nuevo);
+      cancelEdit();
+      onSuccess?.();
+    } catch (e) {
+      setActionError(e instanceof Error ? e.message : "Error al actualizar el contacto.");
+    } finally {
+      setEditSaving(false);
+    }
+  }
+
+  async function executeDelete() {
+    if (!pendingDelete) return;
+    setDeleteSaving(true);
+    setActionError(null);
+    try {
+      const data = await contactosExtraRequest("DELETE", {
+        tipo: pendingDelete.tipo,
+        valor: pendingDelete.valor,
+      });
+      aplicarCambioExtras(data.contactos_extra, pendingDelete.valor, null);
+      setPendingDelete(null);
+      onSuccess?.();
+    } catch (e) {
+      setActionError(e instanceof Error ? e.message : "Error al eliminar el contacto.");
+    } finally {
+      setDeleteSaving(false);
+    }
+  }
+
   function handleClose() {
     setSent(false);
     setError(null);
@@ -264,6 +448,12 @@ export function ContactModal({ isOpen, onClose, entity, channel, apiBase, onSucc
     setCustomValor("");
     setSaveContact(true);
     setSentTo(null);
+    setEditingValor(null);
+    setEditInput("");
+    setActionError(null);
+    setPendingDelete(null);
+    setEmailTemplate("general");
+    prevDefaultsRef.current = { subject: "", model: "" };
     form.reset();
     onClose();
   }
@@ -291,6 +481,18 @@ export function ContactModal({ isOpen, onClose, entity, channel, apiBase, onSucc
             <h3 className="text-lg font-bold text-slate-800 mb-1">¡Mensaje Enviado!</h3>
             <p className="text-sm text-slate-500">
               {channel} enviado exitosamente a <strong>{sentTo || recipient}</strong>
+              {destinoInfo && (
+                <>
+                  {" — "}
+                  {destinoInfo.nombre ? (
+                    <>
+                      <strong>{destinoInfo.nombre}</strong> ({fuenteLabels[destinoInfo.fuente]})
+                    </>
+                  ) : (
+                    <>({fuenteLabels[destinoInfo.fuente]})</>
+                  )}
+                </>
+              )}
             </p>
             <Button
               onClick={handleClose}
@@ -328,6 +530,9 @@ export function ContactModal({ isOpen, onClose, entity, channel, apiBase, onSucc
                           {opciones.map((op) => (
                             <SelectItem key={op.valor} value={op.valor}>
                               <span className="truncate">{op.valor}</span>
+                              {op.nombre && (
+                                <span className="ml-2 text-[10px] text-slate-500 truncate">{op.nombre}</span>
+                              )}
                               <span className="ml-2 text-[10px] text-slate-400">({fuenteLabels[op.fuente]})</span>
                             </SelectItem>
                           ))}
@@ -368,26 +573,135 @@ export function ContactModal({ isOpen, onClose, entity, channel, apiBase, onSucc
                       {recipient || "Sin número/email registrado"}
                     </p>
                   )}
+
+                  {extrasVisibles.length > 0 && (
+                    <div className="space-y-1.5 pt-1">
+                      <p className="text-[10px] font-bold uppercase text-slate-400">Contactos extra</p>
+                      {extrasVisibles.map((c) => (
+                        <div
+                          key={`${c.tipo}-${c.valor}`}
+                          className="flex items-center gap-1.5 rounded-md border border-slate-200 bg-white px-2 py-1.5"
+                        >
+                          {editingValor === c.valor ? (
+                            <>
+                              <Input
+                                value={editInput}
+                                onChange={(e) => setEditInput(e.target.value)}
+                                onKeyDown={(e) => {
+                                  if (e.key === "Enter") {
+                                    e.preventDefault();
+                                    saveEdit();
+                                  }
+                                }}
+                                placeholder={extraTipo === "EMAIL" ? "correo@ejemplo.com" : "0412-1234567"}
+                                className="h-7 text-xs flex-1"
+                                autoFocus
+                                disabled={editSaving}
+                              />
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="icon"
+                                className="h-7 w-7 text-emerald-600 hover:text-emerald-700"
+                                onClick={saveEdit}
+                                disabled={editSaving}
+                                title="Guardar cambios"
+                              >
+                                {editSaving ? (
+                                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                                ) : (
+                                  <Check className="h-3.5 w-3.5" />
+                                )}
+                              </Button>
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="icon"
+                                className="h-7 w-7 text-slate-500"
+                                onClick={cancelEdit}
+                                disabled={editSaving}
+                                title="Cancelar"
+                              >
+                                <X className="h-3.5 w-3.5" />
+                              </Button>
+                            </>
+                          ) : (
+                            <>
+                              <span className="flex-1 truncate text-xs text-slate-700">{c.valor}</span>
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="icon"
+                                className="h-7 w-7 text-slate-400 hover:text-slate-600"
+                                onClick={() => startEdit(c)}
+                                disabled={editSaving || deleteSaving}
+                                title="Editar contacto"
+                              >
+                                <Pencil className="h-3.5 w-3.5" />
+                              </Button>
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="icon"
+                                className="h-7 w-7 text-red-400 hover:text-red-600"
+                                onClick={() => {
+                                  setPendingDelete(c);
+                                  setActionError(null);
+                                }}
+                                disabled={editSaving || deleteSaving}
+                                title="Eliminar contacto"
+                              >
+                                <Trash2 className="h-3.5 w-3.5" />
+                              </Button>
+                            </>
+                          )}
+                        </div>
+                      ))}
+                      {actionError && !pendingDelete && (
+                        <p className="text-[11px] text-red-600">{actionError}</p>
+                      )}
+                    </div>
+                  )}
+
                   <p className="text-[10px] text-slate-400">
                     {entity.name} — {entity.doc_number}
                   </p>
                 </div>
 
-                {/* Asunto (solo email) */}
+                {/* Tipo de correo + Asunto (solo email) */}
                 {channel === "EMAIL" && (
-                  <FormField
-                    control={form.control}
-                    name="subject"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel className="text-xs font-bold uppercase text-slate-400">Asunto</FormLabel>
-                        <FormControl>
-                          <Input placeholder="Asunto del correo" {...field} className="h-9 text-sm" />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
+                  <div className="space-y-3">
+                    <div className="space-y-1.5">
+                      <span className="text-xs font-bold uppercase text-slate-400">Tipo de correo</span>
+                      <Select value={emailTemplate} onValueChange={(v) => aplicarTemplate(v as EmailTemplateType)} disabled={loading}>
+                        <SelectTrigger className="h-9 text-sm">
+                          <SelectValue placeholder="Tipo de correo" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {EMAIL_TEMPLATE_TYPES.map((t) => (
+                            <SelectItem key={t} value={t}>
+                              {EMAIL_TEMPLATES[t].label}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      <p className="text-[11px] text-slate-400">{EMAIL_TEMPLATES[emailTemplate].hint}</p>
+                    </div>
+
+                    <FormField
+                      control={form.control}
+                      name="subject"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel className="text-xs font-bold uppercase text-slate-400">Asunto</FormLabel>
+                          <FormControl>
+                            <Input placeholder="Asunto del correo" {...field} className="h-9 text-sm" />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                  </div>
                 )}
 
                 {/* Mensaje */}
@@ -461,6 +775,39 @@ export function ContactModal({ isOpen, onClose, entity, channel, apiBase, onSucc
           </Form>
         )}
       </DialogContent>
+
+      <AlertDialog open={!!pendingDelete} onOpenChange={(open) => !open && !deleteSaving && setPendingDelete(null)}>
+        <AlertDialogContent size="sm">
+          <AlertDialogHeader>
+            <AlertDialogTitle>¿Eliminar este contacto extra?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Se eliminará <strong>{pendingDelete?.valor}</strong> de los contactos{" "}
+              {pendingDelete?.tipo === "EMAIL" ? "de correo" : "telefónicos"} de {entity.name}. Esta acción no se puede
+              deshacer.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          {actionError && <p className="text-xs text-red-600">{actionError}</p>}
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={deleteSaving}>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              variant="destructive"
+              disabled={deleteSaving}
+              onClick={(e) => {
+                e.preventDefault();
+                executeDelete();
+              }}
+            >
+              {deleteSaving ? (
+                <>
+                  <Loader2 className="h-4 w-4 animate-spin" /> Eliminando...
+                </>
+              ) : (
+                "Eliminar"
+              )}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </Dialog>
   );
 }

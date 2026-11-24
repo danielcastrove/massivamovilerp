@@ -43,6 +43,14 @@ export async function POST(
       );
     }
 
+    // Clientes inactivos o bloqueados no pueden recibir facturas nuevas (la renovación crea una factura)
+    if (invoice.customer && (invoice.customer.status === "INACTIVE" || invoice.customer.status === "BLOCKED")) {
+      return NextResponse.json(
+        { message: `No se puede renovar la factura: el cliente está ${invoice.customer.status === "INACTIVE" ? "inactivo" : "bloqueado"}` },
+        { status: 403 }
+      );
+    }
+
     const today = new Date();
     const dueDate = new Date(
       invoice.proximo_vencimiento_producto || invoice.due_date

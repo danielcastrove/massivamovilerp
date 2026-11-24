@@ -10,6 +10,7 @@ export type ContactoFuente = "principal" | "contacto" | "cobranza" | "extra";
 export interface ContactoOpcion {
   valor: string;
   fuente: ContactoFuente;
+  nombre?: string;
 }
 
 export function formatPhoneParaEnvio(valor: string): string {
@@ -43,23 +44,24 @@ export function parseContactosExtra(raw: unknown): ContactoExtra[] {
 }
 
 export function buildContactOptions(
-  contactos: Array<{ valor: string | null | undefined; fuente: ContactoFuente }>,
+  contactos: Array<{ valor: string | null | undefined; fuente: ContactoFuente; nombre?: string | null }>,
   tipo: ContactoTipo,
   extras: ContactoExtra[]
 ): ContactoOpcion[] {
   const seen = new Set<string>();
   const opciones: ContactoOpcion[] = [];
 
-  const add = (valor: string | null | undefined, fuente: ContactoFuente) => {
+  const add = (valor: string | null | undefined, fuente: ContactoFuente, nombre?: string | null) => {
     const trimmed = valor?.trim();
     if (!trimmed) return;
     const key = normalizeValor(trimmed, tipo);
     if (!key || seen.has(key)) return;
     seen.add(key);
-    opciones.push({ valor: trimmed, fuente });
+    const nombreLimpio = nombre?.trim();
+    opciones.push(nombreLimpio ? { valor: trimmed, fuente, nombre: nombreLimpio } : { valor: trimmed, fuente });
   };
 
-  for (const c of contactos) add(c.valor, c.fuente);
+  for (const c of contactos) add(c.valor, c.fuente, c.nombre);
   for (const e of extras) if (e.tipo === tipo) add(e.valor, "extra");
 
   return opciones;
@@ -72,6 +74,33 @@ export function appendContactoExtra(actual: unknown, tipo: ContactoTipo, valor: 
   if (lista.some((c) => c.tipo === tipo && normalizeValor(c.valor, tipo) === key)) return lista;
   const guardado = tipo === "PHONE" ? formatPhoneParaEnvio(valor) : valor.trim();
   return [...lista, { tipo, valor: guardado }];
+}
+
+export function updateContactoExtra(
+  actual: unknown,
+  tipo: ContactoTipo,
+  valorAnterior: string,
+  nuevoValor: string
+): ContactoExtra[] {
+  const lista = parseContactosExtra(actual);
+  const keyOld = normalizeValor(valorAnterior, tipo);
+  const keyNew = normalizeValor(nuevoValor, tipo);
+  if (!keyOld || !keyNew) return lista;
+  const indice = lista.findIndex((c) => c.tipo === tipo && normalizeValor(c.valor, tipo) === keyOld);
+  if (indice === -1) return lista;
+  const guardado = tipo === "PHONE" ? formatPhoneParaEnvio(nuevoValor) : nuevoValor.trim();
+  const otros = lista.filter((_, i) => i !== indice);
+  if (otros.some((c) => c.tipo === tipo && normalizeValor(c.valor, tipo) === keyNew)) return lista;
+  const actualizada = [...lista];
+  actualizada[indice] = { tipo, valor: guardado };
+  return actualizada;
+}
+
+export function removeContactoExtra(actual: unknown, tipo: ContactoTipo, valor: string): ContactoExtra[] {
+  const lista = parseContactosExtra(actual);
+  const key = normalizeValor(valor, tipo);
+  if (!key) return lista;
+  return lista.filter((c) => !(c.tipo === tipo && normalizeValor(c.valor, tipo) === key));
 }
 
 export function yaTieneContacto(actual: unknown, tipo: ContactoTipo, valor: string, principales: Array<string | null | undefined> = []): boolean {

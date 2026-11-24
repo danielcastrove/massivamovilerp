@@ -360,6 +360,14 @@ model ApiKey {
   @@index([key_hash])
 }
 
+model ApiKeyRateLimit {
+  key_id       String
+  window_start DateTime
+  count        Int      @default(0)
+
+  @@id([key_id, window_start])
+}
+
 enum UserRole {
   MASSIVA_ADMIN
   MASSIVA_EXTRA

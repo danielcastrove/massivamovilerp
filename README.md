@@ -1,5 +1,11 @@
 This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
 
+## Conexión de IAs (Claude, etc.)
+
+El ERP expone un servidor **MCP** en `/api/mcp` para que IAs se conecten de forma segura y **solo lectura** usando una API key (`x-api-key` o `Authorization: Bearer sk-...`), gestionada solo por `MASSIVA_ADMIN` en `/dashboard/api-keys` (preset "Solo lectura (IA/MCP)"). Rate limit persistente en Postgres.
+
+- Guía completa (Claude Code / Claude Desktop / pruebas con curl): [`docs/MCP.md`](docs/MCP.md)
+
 ## Getting Started
 
 First, run the development server:

@@ -38,11 +38,14 @@ jest.mock('next/server', () => {
 
   // Mock the NextResponse function/constructor itself
   // This handles `new NextResponse(...)` calls
-  const NextResponseMock = jest.fn((body, options) => createInstance(body, options));
-
-  // Attach the static `json` method to the mocked constructor/function
-  // This handles `NextResponse.json(...)` calls
-  NextResponseMock.json = jest.fn((data, options) => createInstance(data, options));
+  const NextResponseMock = Object.assign(
+    jest.fn((body: unknown, options?: { status?: number }) => createInstance(body, options)),
+    {
+      json: jest.fn((data: unknown, options?: { status?: number }) =>
+        createInstance(data, options)
+      ),
+    }
+  );
 
   return { NextResponse: NextResponseMock };
 });

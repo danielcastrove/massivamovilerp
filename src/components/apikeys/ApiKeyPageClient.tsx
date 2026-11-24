@@ -582,7 +582,20 @@ export default function ApiKeyPageClient({ initialApiKeys }: ApiKeyPageClientPro
               />
             </div>
             <div>
-              <Label className="text-xs font-bold uppercase text-slate-400">Endpoints Permitidos</Label>
+              <div className="flex items-center justify-between gap-2">
+                <Label className="text-xs font-bold uppercase text-slate-400">Endpoints Permitidos</Label>
+                <button
+                  type="button"
+                  onClick={() =>
+                    setFormEndpoints(
+                      AVAILABLE_ENDPOINTS.map((mod) => `GET:${mod.path}/*`)
+                    )
+                  }
+                  className="text-[11px] font-medium text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-md px-2 py-1 hover:bg-emerald-100 transition-colors"
+                >
+                  Preset: Solo lectura (IA/MCP)
+                </button>
+              </div>
               <div className="mt-2 space-y-1">
                 {AVAILABLE_ENDPOINTS.map((mod) => {
                   const expanded = expandedModules.has(mod.label);

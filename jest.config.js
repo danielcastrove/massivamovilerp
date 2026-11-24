@@ -34,6 +34,8 @@ export default {
       },
       moduleNameMapper: {
         '^@/lib/(.*)$': '<rootDir>/src/lib/$1',
+        '^@/app/(.*)$': '<rootDir>/src/app/$1',
+        '^@/components/(.*)$': '<rootDir>/src/components/$1',
       },
     },
   ],

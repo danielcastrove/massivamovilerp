@@ -2,6 +2,12 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { auth } from "@/lib/auth";
 import { sendNotification } from "@/lib/notifications";
+import { aplicarFirmaWhatsApp, LIMITE_WHATSAPP } from "@/lib/whatsapp-firma";
+import {
+  buildBrandEmail,
+  emailMessageToHtml,
+  isEmailTemplateType,
+} from "@/lib/email-templates";
 import {
   formatPhoneParaEnvio,
   isValidEmail,
@@ -55,14 +61,19 @@ export async function POST(req: NextRequest) {
     }
 
     const body = await req.json();
-    const { entity, ids, channel, destino, message, subject } = body as {
+    const { entity, ids, channel, destino, message, subject, template } = body as {
       entity?: Entidad;
       ids?: string[];
       channel?: Canal;
       destino?: Destino;
       message?: string;
       subject?: string;
+      template?: string;
     };
+
+    if (template !== undefined && template !== null && !isEmailTemplateType(template)) {
+      return NextResponse.json({ message: "Plantilla de correo inválida." }, { status: 400 });
+    }
 
     if (entity !== "customers" && entity !== "leads") {
       return NextResponse.json({ message: "Entidad inválida." }, { status: 400 });
@@ -96,7 +107,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ message: "El SMS no puede exceder 160 caracteres." }, { status: 400 });
     }
 
-    if (channel === "WHATSAPP" && message.length > 1000) {
+    if (channel === "WHATSAPP" && aplicarFirmaWhatsApp(message).length > LIMITE_WHATSAPP) {
       return NextResponse.json({ message: "El mensaje de WhatsApp no puede exceder 1000 caracteres." }, { status: 400 });
     }
 
@@ -144,7 +155,12 @@ export async function POST(req: NextRequest) {
 
     const esTelefono = channel === "SMS" || channel === "WHATSAPP";
     const html = channel === "EMAIL";
-    const cuerpo = html ? `<p>${message.replace(/\n/g, "<br/>")}</p>` : message;
+    const cuerpo = html
+      ? buildBrandEmail({
+          type: isEmailTemplateType(template) ? template : "general",
+          bodyHtml: emailMessageToHtml(message),
+        })
+      : message;
 
     let enviados = 0;
     let fallidos = 0;

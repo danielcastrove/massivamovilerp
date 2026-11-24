@@ -3,6 +3,7 @@ import axios from 'axios';
 import { sendSmsMassiva } from './sms';
 import { sendWhatsAppMassiva } from './whatsapp';
 import { sendEmail } from './email';
+import { buildBrandEmail, emailMessageToHtml } from './email-templates';
 
 interface NotificationOptions {
   to: string; // Phone number for SMS/WA, Email for Email
@@ -84,7 +85,10 @@ export async function sendPaymentConfirmation({
         notifications.push(sendNotification({
             to: toEmail,
             customerName,
-            message: `<p>${message}</p>`,
+            message: buildBrandEmail({
+                type: 'payment_confirmation',
+                bodyHtml: emailMessageToHtml(message),
+            }),
             type: 'EMAIL',
             subject: 'Confirmación de Pago - MassivaMovil'
         }));

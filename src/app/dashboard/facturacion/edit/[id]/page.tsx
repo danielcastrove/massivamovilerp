@@ -78,6 +78,9 @@ export default async function EditarFacturaPage({ params }: PageProps) {
     type: invoice.type,
     issue_date: invoice.issue_date.toISOString().split('T')[0],
     due_date: invoice.due_date.toISOString().split('T')[0],
+    proximo_vencimiento_producto: invoice.proximo_vencimiento_producto
+      ? invoice.proximo_vencimiento_producto.toISOString().split('T')[0]
+      : invoice.due_date.toISOString().split('T')[0],
     invoice_number: invoice.invoice_number ?? undefined,
     control_number: invoice.control_number ?? undefined,
     items: invoice.invoice_items.map(item => ({

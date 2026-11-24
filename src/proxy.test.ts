@@ -1,4 +1,4 @@
-import { middleware } from './middleware';
+import { proxy as middleware } from './proxy';
 import { NextRequest } from 'next/server';
 import { NextResponse } from 'next/server';
 import NextAuth from 'next-auth';

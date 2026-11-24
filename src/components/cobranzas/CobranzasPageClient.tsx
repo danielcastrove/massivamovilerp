@@ -294,20 +294,18 @@ export default function CobranzasPageClient({ initialCustomers, bcvRate }: Cobra
 
   const filteredCustomers = useMemo(() => {
     const today = new Date();
-    const cutoff = new Date(today.getTime() + 10 * 24 * 60 * 60 * 1000);
     const startDate = filterStartDate ? startOfDay(parseDateInput(filterStartDate)!) : null;
     const endDate = filterEndDate ? endOfDay(parseDateInput(filterEndDate)!) : null;
 
     return initialCustomers.map(cust => {
-      // Todas las facturas del cliente dentro del rango de fechas (o la ventana
-      // por defecto de 10 días), ordenadas de la más vieja a la más nueva
+      // Todas las facturas del cliente dentro del rango de fechas (sin límite
+      // cuando Frecuencia = "Todas"; con frecuencia explícita se aplica su ventana)
       const invoices = [...(cust.invoices || [])]
         .filter(inv => {
           const due = new Date(getDueDate(inv)).getTime();
           if (Number.isNaN(due)) return false;
           if (startDate && due < startDate.getTime()) return false;
           if (endDate && due > endDate.getTime()) return false;
-          if (!startDate && !endDate && frecuenciaFilter === "ALL" && due > cutoff.getTime()) return false;
           if (docTypeFilter !== "ALL" && inv.type !== docTypeFilter) return false;
           if (categoryFilter !== "ALL") {
             const hasCategory = (inv.invoice_items || []).some(
